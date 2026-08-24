@@ -87,7 +87,7 @@ class SavingsGoal {
   });
 
   final String name;
-  final String imageAsset;
+  final String? imageAsset;
   final int price;
   final int saved;
   final int savingAmount;
@@ -96,6 +96,7 @@ class SavingsGoal {
   SavingsGoal copyWith({
     String? name,
     String? imageAsset,
+    bool clearImage = false,
     int? price,
     int? saved,
     int? savingAmount,
@@ -103,11 +104,60 @@ class SavingsGoal {
   }) {
     return SavingsGoal(
       name: name ?? this.name,
-      imageAsset: imageAsset ?? this.imageAsset,
+      imageAsset: clearImage ? null : imageAsset ?? this.imageAsset,
       price: price ?? this.price,
       saved: saved ?? this.saved,
       savingAmount: savingAmount ?? this.savingAmount,
       savingPeriod: savingPeriod ?? this.savingPeriod,
+    );
+  }
+}
+
+@immutable
+class WishItem {
+  const WishItem({required this.id, required this.name, required this.price});
+
+  final String id;
+  final String name;
+  final int price;
+
+  WishItem copyWith({String? name, int? price}) {
+    return WishItem(
+      id: id,
+      name: name ?? this.name,
+      price: price ?? this.price,
+    );
+  }
+}
+
+@immutable
+class FixedExpense {
+  const FixedExpense({
+    required this.id,
+    required this.name,
+    required this.amount,
+    required this.category,
+    required this.billingDay,
+  });
+
+  final String id;
+  final String name;
+  final int amount;
+  final String category;
+  final int billingDay;
+
+  FixedExpense copyWith({
+    String? name,
+    int? amount,
+    String? category,
+    int? billingDay,
+  }) {
+    return FixedExpense(
+      id: id,
+      name: name ?? this.name,
+      amount: amount ?? this.amount,
+      category: category ?? this.category,
+      billingDay: billingDay ?? this.billingDay,
     );
   }
 }

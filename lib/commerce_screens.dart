@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'app_widgets.dart';
 import 'models.dart';
@@ -8,43 +9,83 @@ import 'seed_data.dart';
 class ShoppingScreen extends StatefulWidget {
   const ShoppingScreen({
     required this.goal,
+    required this.wishItems,
     required this.onPeriodChanged,
     required this.onAmountChanged,
-    required this.onSelectProduct,
+    required this.onAddWishItem,
+    required this.onUpdateWishItem,
+    required this.onDeleteWishItem,
+    required this.onSelectWishItem,
     super.key,
   });
 
   final SavingsGoal goal;
+  final List<WishItem> wishItems;
   final ValueChanged<SavingPeriod> onPeriodChanged;
   final ValueChanged<int> onAmountChanged;
-  final ValueChanged<ShopProduct> onSelectProduct;
+  final ValueChanged<WishItem> onAddWishItem;
+  final ValueChanged<WishItem> onUpdateWishItem;
+  final ValueChanged<WishItem> onDeleteWishItem;
+  final ValueChanged<WishItem> onSelectWishItem;
 
   @override
   State<ShoppingScreen> createState() => _ShoppingScreenState();
 }
 
 class _ShoppingScreenState extends State<ShoppingScreen> {
-  String _activeTab = 'ranking';
+  Future<void> _openEditor([WishItem? item]) async {
+    final palette = ThemeScope.paletteOf(context);
+    final result = await showModalBottomSheet<WishItem>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) => ThemeScope(
+        palette: palette,
+        child: _WishItemEditor(item: item),
+      ),
+    );
+    if (result == null || !mounted) return;
+    if (item == null) {
+      widget.onAddWishItem(result);
+    } else {
+      widget.onUpdateWishItem(result);
+    }
+  }
 
-  static const tabs = <(String, String)>[
-    ('ranking', '랭킹'),
-    ('new', '신상품'),
-    ('sale', '세일'),
-    ('special', '스페셜'),
-  ];
+  Future<void> _confirmDelete(WishItem item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('목표를 삭제할까요?'),
+        content: Text('${item.name}을 위시리스트에서 삭제해요.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) widget.onDeleteWishItem(item);
+  }
 
   @override
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
-    final products = shopProducts
-        .where((product) => product.tabs.contains(_activeTab))
-        .toList();
     return ListView(
       key: const PageStorageKey('shop-scroll'),
       padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
       children: [
         Text(
-          '위시 스토어',
+          '내 위시리스트',
           style: TextStyle(
             color: palette.text,
             fontSize: 26,
@@ -54,32 +95,113 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
         ),
         const SizedBox(height: 4),
         Text(
-          '물건을 누르면 저축 목표가 바뀌어요',
+          '갖고 싶은 물건과 가격을 직접 등록해요',
           style: TextStyle(color: palette.textMuted, fontSize: 13),
         ),
         const SizedBox(height: 18),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: tabs.map((tab) {
-            final (id, label) = tab;
-            final selected = id == _activeTab;
-            return ChoiceChip(
-              label: Text(label),
-              selected: selected,
-              showCheckmark: false,
-              onSelected: (_) => setState(() => _activeTab = id),
-              selectedColor: palette.accent,
-              backgroundColor: mutedBackground,
-              side: BorderSide.none,
-              shape: const StadiumBorder(),
-              labelStyle: TextStyle(
-                color: selected ? palette.text : palette.textSoft,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: palette.accentSoft,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            children: [
+              GoalImage(
+                imageAsset: widget.goal.imageAsset,
+                size: 56,
+                radius: 16,
               ),
-            );
-          }).toList(),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '현재 저축 목표',
+                      style: TextStyle(color: palette.textSoft, fontSize: 12),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      widget.goal.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: palette.text,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      formatWon(widget.goal.price),
+                      style: TextStyle(color: palette.textSoft, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            key: const Key('add-wish-button'),
+            onPressed: _openEditor,
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('갖고 싶은 것 추가'),
+            style: FilledButton.styleFrom(
+              backgroundColor: palette.accent,
+              foregroundColor: palette.text,
+              minimumSize: const Size.fromHeight(50),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              textStyle: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: mutedBackground,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.auto_awesome_outlined,
+                color: palette.textMuted,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'AI로 가격 자동 찾기',
+                      style: TextStyle(
+                        color: palette.textSoft,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      '후순위 기능 · 준비 중',
+                      style: TextStyle(color: palette.textMuted, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.lock_clock_outlined,
+                color: Color(0xFFAAAAAA),
+                size: 18,
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
         SavingPlanCard(
@@ -88,146 +210,267 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
           onPeriodChanged: widget.onPeriodChanged,
           onAmountChanged: widget.onAmountChanged,
         ),
-        const SizedBox(height: 16),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: products.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-            childAspectRatio: 0.48,
+        const SizedBox(height: 24),
+        Text(
+          '내가 등록한 목표',
+          style: TextStyle(
+            color: palette.text,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
           ),
-          itemBuilder: (context, index) {
-            final product = products[index];
-            return _ProductCard(
-              product: product,
-              selected: product.shortName == widget.goal.name,
-              dailyRate: dailySavingRate(widget.goal),
-              onTap: () => widget.onSelectProduct(product),
-            );
-          },
         ),
+        const SizedBox(height: 10),
+        if (widget.wishItems.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(22),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: mutedBackground,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.favorite_border_rounded, color: palette.textMuted),
+                const SizedBox(height: 8),
+                Text(
+                  '아직 등록한 목표가 없어요',
+                  style: TextStyle(
+                    color: palette.textSoft,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          ...widget.wishItems.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _WishItemCard(
+                item: item,
+                selected:
+                    widget.goal.imageAsset == null &&
+                    widget.goal.name == item.name &&
+                    widget.goal.price == item.price,
+                dailyRate: dailySavingRate(widget.goal),
+                onSelect: () => widget.onSelectWishItem(item),
+                onEdit: () => _openEditor(item),
+                onDelete: () => _confirmDelete(item),
+              ),
+            ),
+          ),
       ],
     );
   }
 }
 
-class _ProductCard extends StatelessWidget {
-  const _ProductCard({
-    required this.product,
+class _WishItemCard extends StatelessWidget {
+  const _WishItemCard({
+    required this.item,
     required this.selected,
     required this.dailyRate,
-    required this.onTap,
+    required this.onSelect,
+    required this.onEdit,
+    required this.onDelete,
   });
 
-  final ShopProduct product;
+  final WishItem item;
   final bool selected;
   final double dailyRate;
-  final VoidCallback onTap;
+  final VoidCallback onSelect;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
-    return Material(
-      color: selected ? palette.accentSoft : mutedBackground,
-      borderRadius: BorderRadius.circular(16),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        key: Key('product-${product.id}'),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(9),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${product.rank}',
-                style: TextStyle(
-                  color: palette.text,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 4),
-              AspectRatio(
-                aspectRatio: 1,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.asset(product.imageAsset, fit: BoxFit.cover),
-                ),
-              ),
-              const SizedBox(height: 7),
-              Row(
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+      decoration: BoxDecoration(
+        color: selected ? palette.accentSoft : mutedBackground,
+        borderRadius: BorderRadius.circular(18),
+        border: selected ? Border.all(color: palette.accentBorder) : null,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Icon(Icons.card_giftcard_rounded, color: palette.textSoft),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: InkWell(
+              key: Key('wish-${item.id}'),
+              onTap: onSelect,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      product.brand,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: palette.textSoft, fontSize: 10),
+                  Text(
+                    item.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                  if (product.rankChange != 0)
-                    Text(
-                      '${product.rankChange > 0 ? '▲' : '▼'}${product.rankChange.abs()}',
-                      style: TextStyle(
-                        color: product.rankChange > 0
-                            ? const Color(0xFFE53935)
-                            : const Color(0xFF1E88E5),
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${formatWon(item.price)} · ${daysToAfford(item.price, dailyRate)}일 예상',
+                    style: TextStyle(color: palette.textSoft, fontSize: 12),
+                  ),
                 ],
               ),
-              const SizedBox(height: 3),
-              Text(
-                product.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: palette.text,
-                  fontSize: 11,
-                  height: 1.25,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${daysToAfford(product.originalPrice, dailyRate)}일',
-                style: TextStyle(
-                  color: palette.textMuted,
-                  fontSize: 10,
-                  decoration: TextDecoration.lineThrough,
-                ),
-              ),
-              Text(
-                '${daysToAfford(product.price, dailyRate)}일',
-                style: TextStyle(
-                  color: palette.text,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: product.colors
-                    .map(
-                      (color) => Container(
-                        width: 10,
-                        height: 10,
-                        margin: const EdgeInsets.only(right: 4),
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: dividerColor),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ],
+            ),
           ),
+          IconButton(
+            key: Key('edit-wish-${item.id}'),
+            tooltip: '수정',
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_outlined, size: 19),
+            color: palette.textMuted,
+          ),
+          IconButton(
+            key: Key('delete-wish-${item.id}'),
+            tooltip: '삭제',
+            onPressed: onDelete,
+            icon: const Icon(Icons.delete_outline_rounded, size: 19),
+            color: palette.textMuted,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WishItemEditor extends StatefulWidget {
+  const _WishItemEditor({this.item});
+
+  final WishItem? item;
+
+  @override
+  State<_WishItemEditor> createState() => _WishItemEditorState();
+}
+
+class _WishItemEditorState extends State<_WishItemEditor> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late final TextEditingController _priceController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.item?.name ?? '');
+    _priceController = TextEditingController(
+      text: widget.item == null ? '' : '${widget.item!.price}',
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _priceController.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.pop(
+      context,
+      WishItem(
+        id: widget.item?.id ?? DateTime.now().microsecondsSinceEpoch.toString(),
+        name: _nameController.text.trim(),
+        price: int.parse(_priceController.text),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = ThemeScope.paletteOf(context);
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        24,
+        20,
+        24 + MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.item == null ? '갖고 싶은 것 추가' : '목표 수정',
+              style: TextStyle(
+                color: palette.text,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '물건 이름과 예상 가격을 입력해 주세요.',
+              style: TextStyle(color: palette.textMuted, fontSize: 13),
+            ),
+            const SizedBox(height: 20),
+            TextFormField(
+              key: const Key('wish-name-field'),
+              controller: _nameController,
+              autofocus: true,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(
+                labelText: '물건 이름',
+                hintText: '예: 무선 키보드',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) => value == null || value.trim().isEmpty
+                  ? '물건 이름을 입력해 주세요'
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              key: const Key('wish-price-field'),
+              controller: _priceController,
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onFieldSubmitted: (_) => _save(),
+              decoration: const InputDecoration(
+                labelText: '예상 가격',
+                suffixText: '원',
+                hintText: '예: 120000',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) {
+                final price = int.tryParse(value ?? '');
+                return price == null || price < 1 ? '1원 이상의 가격을 입력해 주세요' : null;
+              },
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                key: const Key('save-wish-button'),
+                onPressed: _save,
+                style: FilledButton.styleFrom(
+                  backgroundColor: palette.accent,
+                  foregroundColor: palette.text,
+                  minimumSize: const Size.fromHeight(52),
+                  textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                child: const Text('저장하고 목표로 설정'),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -378,38 +621,34 @@ class _PaymentScreenState extends State<PaymentScreen> {
           const SizedBox(height: 28),
           Row(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Image.asset(
-                  widget.goal.imageAsset,
-                  width: 72,
-                  height: 72,
-                  fit: BoxFit.cover,
-                ),
-              ),
+              GoalImage(imageAsset: widget.goal.imageAsset),
               const SizedBox(width: 14),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '구매할 물건',
-                    style: TextStyle(
-                      color: palette.textSoft,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '구매할 물건',
+                      style: TextStyle(
+                        color: palette.textSoft,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    widget.goal.name,
-                    style: TextStyle(
-                      color: palette.text,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.8,
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.goal.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: palette.text,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.8,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),

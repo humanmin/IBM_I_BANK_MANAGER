@@ -262,15 +262,7 @@ class _GoalCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Image.asset(
-                  goal.imageAsset,
-                  width: 72,
-                  height: 72,
-                  fit: BoxFit.cover,
-                ),
-              ),
+              GoalImage(imageAsset: goal.imageAsset),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(

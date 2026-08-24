@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'app_widgets.dart';
 import 'models.dart';
@@ -213,9 +214,20 @@ class _InsightCard extends StatelessWidget {
 }
 
 class SpendingScreen extends StatefulWidget {
-  const SpendingScreen({this.initialCategory, super.key});
+  const SpendingScreen({
+    required this.fixedExpenses,
+    required this.onAddFixedExpense,
+    required this.onUpdateFixedExpense,
+    required this.onDeleteFixedExpense,
+    this.initialCategory,
+    super.key,
+  });
 
   final String? initialCategory;
+  final List<FixedExpense> fixedExpenses;
+  final ValueChanged<FixedExpense> onAddFixedExpense;
+  final ValueChanged<FixedExpense> onUpdateFixedExpense;
+  final ValueChanged<FixedExpense> onDeleteFixedExpense;
 
   @override
   State<SpendingScreen> createState() => _SpendingScreenState();
@@ -228,6 +240,50 @@ class _SpendingScreenState extends State<SpendingScreen> {
   void initState() {
     super.initState();
     _selectedCategories = {?widget.initialCategory};
+  }
+
+  Future<void> _openFixedExpenseEditor([FixedExpense? expense]) async {
+    final palette = ThemeScope.paletteOf(context);
+    final result = await showModalBottomSheet<FixedExpense>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) => ThemeScope(
+        palette: palette,
+        child: _FixedExpenseEditor(expense: expense),
+      ),
+    );
+    if (result == null || !mounted) return;
+    if (expense == null) {
+      widget.onAddFixedExpense(result);
+    } else {
+      widget.onUpdateFixedExpense(result);
+    }
+  }
+
+  Future<void> _confirmFixedExpenseDelete(FixedExpense expense) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('고정지출을 삭제할까요?'),
+        content: Text('${expense.name}을 목록에서 삭제해요.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) widget.onDeleteFixedExpense(expense);
   }
 
   @override
@@ -352,6 +408,13 @@ class _SpendingScreenState extends State<SpendingScreen> {
           ),
         ],
         const SizedBox(height: 28),
+        _FixedExpensesSection(
+          expenses: widget.fixedExpenses,
+          onAdd: _openFixedExpenseEditor,
+          onEdit: _openFixedExpenseEditor,
+          onDelete: _confirmFixedExpenseDelete,
+        ),
+        const SizedBox(height: 28),
         Text(
           '최근 내역',
           style: TextStyle(
@@ -451,6 +514,401 @@ class _SpendingScreenState extends State<SpendingScreen> {
       widgets.add(_TransactionRow(transaction: item));
     }
     return widgets;
+  }
+}
+
+const _fixedExpenseCategories = <String>[
+  'OTT·구독',
+  '통신비',
+  '관리비',
+  '월세',
+  '보험',
+  '기타',
+];
+
+String _fixedExpenseEmoji(String category) {
+  return switch (category) {
+    'OTT·구독' => '📺',
+    '통신비' => '📱',
+    '관리비' => '🏢',
+    '월세' => '🏠',
+    '보험' => '🛡️',
+    _ => '📌',
+  };
+}
+
+class _FixedExpensesSection extends StatelessWidget {
+  const _FixedExpensesSection({
+    required this.expenses,
+    required this.onAdd,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final List<FixedExpense> expenses;
+  final VoidCallback onAdd;
+  final ValueChanged<FixedExpense> onEdit;
+  final ValueChanged<FixedExpense> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = ThemeScope.paletteOf(context);
+    final monthlyTotal = expenses.fold<int>(
+      0,
+      (total, expense) => total + expense.amount,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '구독·고정지출',
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '매달 빠져나가는 비용을 직접 관리해요',
+                    style: TextStyle(color: palette.textMuted, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            FilledButton.icon(
+              key: const Key('add-fixed-expense-button'),
+              onPressed: onAdd,
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('등록'),
+              style: FilledButton.styleFrom(
+                backgroundColor: palette.accent,
+                foregroundColor: palette.text,
+                padding: const EdgeInsets.symmetric(horizontal: 13),
+                textStyle: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: palette.accentSoft,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            children: [
+              Text(
+                '월 고정지출',
+                style: TextStyle(
+                  color: palette.textSoft,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                formatWon(monthlyTotal),
+                style: TextStyle(
+                  color: palette.text,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        if (expenses.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: mutedBackground,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              '등록된 고정지출이 없어요',
+              style: TextStyle(
+                color: palette.textMuted,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          )
+        else
+          ...expenses.map(
+            (expense) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.fromLTRB(12, 8, 2, 8),
+              decoration: BoxDecoration(
+                color: mutedBackground,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: Text(
+                      _fixedExpenseEmoji(expense.category),
+                      style: const TextStyle(fontSize: 18),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          expense.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: palette.text,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        Text(
+                          '${expense.category} · 매월 ${expense.billingDay}일',
+                          style: TextStyle(
+                            color: palette.textMuted,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    formatWon(expense.amount),
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  IconButton(
+                    key: Key('edit-fixed-${expense.id}'),
+                    tooltip: '수정',
+                    onPressed: () => onEdit(expense),
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    color: palette.textMuted,
+                  ),
+                  IconButton(
+                    key: Key('delete-fixed-${expense.id}'),
+                    tooltip: '삭제',
+                    onPressed: () => onDelete(expense),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                    color: palette.textMuted,
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _FixedExpenseEditor extends StatefulWidget {
+  const _FixedExpenseEditor({this.expense});
+
+  final FixedExpense? expense;
+
+  @override
+  State<_FixedExpenseEditor> createState() => _FixedExpenseEditorState();
+}
+
+class _FixedExpenseEditorState extends State<_FixedExpenseEditor> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late final TextEditingController _amountController;
+  late final TextEditingController _billingDayController;
+  late String _category;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.expense?.name ?? '');
+    _amountController = TextEditingController(
+      text: widget.expense == null ? '' : '${widget.expense!.amount}',
+    );
+    _billingDayController = TextEditingController(
+      text: widget.expense == null ? '' : '${widget.expense!.billingDay}',
+    );
+    _category = widget.expense?.category ?? _fixedExpenseCategories.first;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _amountController.dispose();
+    _billingDayController.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.pop(
+      context,
+      FixedExpense(
+        id:
+            widget.expense?.id ??
+            DateTime.now().microsecondsSinceEpoch.toString(),
+        name: _nameController.text.trim(),
+        amount: int.parse(_amountController.text),
+        category: _category,
+        billingDay: int.parse(_billingDayController.text),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = ThemeScope.paletteOf(context);
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        24,
+        20,
+        24 + MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.expense == null ? '고정지출 등록' : '고정지출 수정',
+              style: TextStyle(
+                color: palette.text,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '구독, 통신비, 관리비, 월세 등을 등록해 보세요.',
+              style: TextStyle(color: palette.textMuted, fontSize: 13),
+            ),
+            const SizedBox(height: 20),
+            TextFormField(
+              key: const Key('fixed-name-field'),
+              controller: _nameController,
+              autofocus: true,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(
+                labelText: '지출 이름',
+                hintText: '예: 넷플릭스',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) => value == null || value.trim().isEmpty
+                  ? '지출 이름을 입력해 주세요'
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _category,
+              decoration: const InputDecoration(
+                labelText: '분류',
+                border: OutlineInputBorder(),
+              ),
+              items: _fixedExpenseCategories
+                  .map(
+                    (category) => DropdownMenuItem(
+                      value: category,
+                      child: Text('${_fixedExpenseEmoji(category)} $category'),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) setState(() => _category = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    key: const Key('fixed-amount-field'),
+                    controller: _amountController,
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.next,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      labelText: '월 금액',
+                      suffixText: '원',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      final amount = int.tryParse(value ?? '');
+                      return amount == null || amount < 1
+                          ? '금액을 입력해 주세요'
+                          : null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextFormField(
+                    key: const Key('fixed-day-field'),
+                    controller: _billingDayController,
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.done,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onFieldSubmitted: (_) => _save(),
+                    decoration: const InputDecoration(
+                      labelText: '결제일',
+                      suffixText: '일',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      final day = int.tryParse(value ?? '');
+                      return day == null || day < 1 || day > 31
+                          ? '1~31일'
+                          : null;
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                key: const Key('save-fixed-expense-button'),
+                onPressed: _save,
+                style: FilledButton.styleFrom(
+                  backgroundColor: palette.accent,
+                  foregroundColor: palette.text,
+                  minimumSize: const Size.fromHeight(52),
+                  textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                child: const Text('저장'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

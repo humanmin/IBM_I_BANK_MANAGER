@@ -86,6 +86,42 @@ class SoftCard extends StatelessWidget {
   }
 }
 
+class GoalImage extends StatelessWidget {
+  const GoalImage({
+    required this.imageAsset,
+    this.size = 72,
+    this.radius = 20,
+    super.key,
+  });
+
+  final String? imageAsset;
+  final double size;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = ThemeScope.paletteOf(context);
+    final asset = imageAsset;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: asset == null
+            ? ColoredBox(
+                color: Colors.white.withValues(alpha: 0.7),
+                child: Icon(
+                  Icons.card_giftcard_rounded,
+                  color: palette.textSoft,
+                  size: size * 0.42,
+                ),
+              )
+            : Image.asset(asset, fit: BoxFit.cover),
+      ),
+    );
+  }
+}
+
 class ThemeScope extends InheritedWidget {
   const ThemeScope({required this.palette, required super.child, super.key});
 

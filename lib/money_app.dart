@@ -20,6 +20,8 @@ class _MoneyAppState extends State<MoneyApp> {
   ThemeChoice _themeChoice = ThemeChoice.green;
   int _unreadCount = demoNotifications.length;
   String? _spendingFilter;
+  final List<FixedExpense> _fixedExpenses = [];
+  final List<WishItem> _wishItems = [];
 
   AppPalette get _palette => AppPalette.fromChoice(_themeChoice);
 
@@ -52,15 +54,58 @@ class _MoneyAppState extends State<MoneyApp> {
     setState(() => _goal = _goal.copyWith(savingAmount: amount));
   }
 
-  void _selectProduct(ShopProduct product) {
+  void _addFixedExpense(FixedExpense expense) {
+    setState(() => _fixedExpenses.add(expense));
+  }
+
+  void _updateFixedExpense(FixedExpense expense) {
+    setState(() {
+      final index = _fixedExpenses.indexWhere((item) => item.id == expense.id);
+      if (index != -1) _fixedExpenses[index] = expense;
+    });
+  }
+
+  void _deleteFixedExpense(FixedExpense expense) {
+    setState(() => _fixedExpenses.removeWhere((item) => item.id == expense.id));
+  }
+
+  void _selectWishItem(WishItem item) {
     setState(() {
       _goal = _goal.copyWith(
-        name: product.shortName,
-        imageAsset: product.imageAsset,
-        price: product.price,
+        name: item.name,
+        price: item.price,
+        clearImage: true,
       );
       _activeTab = AppTab.home;
     });
+  }
+
+  void _addWishItem(WishItem item) {
+    setState(() {
+      _wishItems.add(item);
+      _goal = _goal.copyWith(
+        name: item.name,
+        price: item.price,
+        clearImage: true,
+      );
+      _activeTab = AppTab.home;
+    });
+  }
+
+  void _updateWishItem(WishItem item) {
+    setState(() {
+      final index = _wishItems.indexWhere((entry) => entry.id == item.id);
+      if (index == -1) return;
+      final previous = _wishItems[index];
+      _wishItems[index] = item;
+      if (_goal.imageAsset == null && _goal.name == previous.name) {
+        _goal = _goal.copyWith(name: item.name, price: item.price);
+      }
+    });
+  }
+
+  void _deleteWishItem(WishItem item) {
+    setState(() => _wishItems.removeWhere((entry) => entry.id == item.id));
   }
 
   void _finishPayment(AppTab destination) {
@@ -96,12 +141,20 @@ class _MoneyAppState extends State<MoneyApp> {
       AppTab.spending => SpendingScreen(
         key: ValueKey(_spendingFilter ?? 'all'),
         initialCategory: _spendingFilter,
+        fixedExpenses: _fixedExpenses,
+        onAddFixedExpense: _addFixedExpense,
+        onUpdateFixedExpense: _updateFixedExpense,
+        onDeleteFixedExpense: _deleteFixedExpense,
       ),
       AppTab.shop => ShoppingScreen(
         goal: _goal,
+        wishItems: _wishItems,
         onPeriodChanged: _changePeriod,
         onAmountChanged: _changeSavingAmount,
-        onSelectProduct: _selectProduct,
+        onAddWishItem: _addWishItem,
+        onUpdateWishItem: _updateWishItem,
+        onDeleteWishItem: _deleteWishItem,
+        onSelectWishItem: _selectWishItem,
       ),
       AppTab.payment => PaymentScreen(
         goal: _goal,
