@@ -1,0 +1,28 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: health-check
+  labels:
+    app: product-search-server
+spec:
+  params:
+    - name: url
+      type: string
+      description: 헬스체크 엔드포인트 전체 URL (예 https://product-search-server-ns.apps.cluster.example.com/health)
+  steps:
+    - name: curl
+      image: registry.access.redhat.com/ubi9/ubi-minimal
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        microdnf install -y curl > /dev/null
+        for i in $(seq 1 6); do
+          if curl --fail --silent "$(params.url)"; then
+            echo "health check ok"
+            exit 0
+          fi
+          echo "retry $i..."
+          sleep 5
+        done
+        echo "health check failed" >&2
+        exit 1
