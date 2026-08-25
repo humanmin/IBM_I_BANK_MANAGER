@@ -1,0 +1,27 @@
+# 웹훅 없이 파이프라인만 먼저 검증하고 싶을 때:
+#   oc create -f pipelinerun-manual.yaml
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: product-search-server-manual-run-
+spec:
+  pipelineRef:
+    name: product-search-server-pipeline
+  serviceAccountName: pipeline
+  params:
+    - name: git-url
+      value: https://github.com/humanmin/IBM_I_BANK_MANAGER.git
+    - name: git-revision
+      value: main
+    - name: namespace
+      value: CHANGE_ME_NAMESPACE
+    - name: health-url
+      value: https://product-search-server-CHANGE_ME_NAMESPACE.apps.CHANGE_ME_CLUSTER_DOMAIN/health
+  workspaces:
+    - name: shared-workspace
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 1Gi
