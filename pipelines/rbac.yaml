@@ -1,0 +1,66 @@
+# OpenShift Pipelines 오퍼레이터가 프로젝트 생성 시 기본 'pipeline' ServiceAccount를
+# 자동 생성해주는 경우가 많지만, 명시적으로 선언해 재현 가능하게 만듭니다.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pipeline
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pipeline-edit
+subjects:
+  - kind: ServiceAccount
+    name: pipeline
+roleRef:
+  kind: ClusterRole
+  name: edit
+  apiGroup: rbac.authorization.k8s.io
+---
+# OpenShift 전용: buildah는 컨테이너 이미지를 빌드하려면 root 유사 권한이
+# 필요합니다. 기본 'restricted' SCC로는 build-and-push Task가 실패합니다.
+# (이건 vanilla Kubernetes에는 없는 개념이라 별도로 명시)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pipeline-anyuid-scc
+subjects:
+  - kind: ServiceAccount
+    name: pipeline
+roleRef:
+  kind: ClusterRole
+  name: system:openshift:scc:anyuid
+  apiGroup: rbac.authorization.k8s.io
+---
+# GitHub Webhook -> EventListener가 PipelineRun을 생성할 때 사용하는 최소 권한 계정
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: el-product-search-server
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: el-product-search-server
+rules:
+  - apiGroups: ["triggers.tekton.dev"]
+    resources: ["eventlisteners", "triggerbindings", "triggertemplates", "triggers", "clusterinterceptors", "clustertriggerbindings"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["tekton.dev"]
+    resources: ["pipelineruns", "taskruns"]
+    verbs: ["create", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: el-product-search-server
+subjects:
+  - kind: ServiceAccount
+    name: el-product-search-server
+roleRef:
+  kind: Role
+  name: el-product-search-server
+  apiGroup: rbac.authorization.k8s.io
