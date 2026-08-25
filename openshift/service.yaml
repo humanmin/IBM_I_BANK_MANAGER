@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-search-server
+  labels:
+    app: product-search-server
+spec:
+  selector:
+    app: product-search-server
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
