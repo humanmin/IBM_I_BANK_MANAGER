@@ -1,0 +1,23 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: rollout-status
+  labels:
+    app: product-search-server
+spec:
+  params:
+    - name: deployment
+      type: string
+      default: product-search-server
+    - name: namespace
+      type: string
+  steps:
+    - name: wait
+      image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        # Deployment의 image.openshift.io/triggers 어노테이션이 새 이미지를 보고
+        # 자동으로 새 ReplicaSet을 굴립니다. 여기서는 그 롤아웃이 끝날 때까지만 대기합니다.
+        oc rollout status deployment/$(params.deployment) \
+          -n $(params.namespace) --timeout=180s
