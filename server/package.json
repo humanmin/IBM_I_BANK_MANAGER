@@ -1,0 +1,11 @@
+{
+  "name": "ibm-money-app-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}
