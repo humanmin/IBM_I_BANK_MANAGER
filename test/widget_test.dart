@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ibm_money_app/models.dart';
 import 'package:ibm_money_app/money_app.dart';
@@ -75,6 +76,87 @@ void main() {
     await tester.tap(find.text('29,900원 결제하기'));
     await tester.pumpAndSettle();
     expect(find.text('결제 완료'), findsOneWidget);
+  });
+
+  testWidgets('saving action wraps to the next line as a whole', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(402, 874));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MoneyApp(productSearchGateway: _FakeProductSearchGateway()),
+    );
+    await tester.pumpAndSettle();
+
+    final amountField = find.byKey(const Key('saving-amount-field'));
+    final savingSentence = find.byKey(const Key('saving-sentence-wrap'));
+    final savingPeriod = find.byKey(const Key('saving-period-menu'));
+    final wonText = find.text('원을');
+    final savingAction = find.text('저축하기');
+    expect(
+      (tester.getCenter(amountField).dy - tester.getCenter(savingAction).dy)
+          .abs(),
+      lessThan(10),
+    );
+    final sentenceCenterX = tester.getCenter(savingSentence).dx;
+    final contentCenterX =
+        (tester.getTopLeft(savingPeriod).dx +
+            tester.getTopRight(savingAction).dx) /
+        2;
+    expect((sentenceCenterX - contentCenterX).abs(), lessThan(2));
+    expect(
+      tester.getTopLeft(savingAction).dx - tester.getTopRight(wonText).dx,
+      greaterThanOrEqualTo(3),
+    );
+
+    await tester.enterText(amountField, '1000000');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getTopLeft(savingAction).dy,
+      greaterThan(tester.getBottomLeft(find.text('원을')).dy),
+    );
+    expect(tester.getSize(savingAction).height, lessThan(40));
+    expect(
+      (tester.getCenter(savingSentence).dx - tester.getCenter(savingAction).dx)
+          .abs(),
+      lessThan(2),
+    );
+  });
+
+  testWidgets('mouse scrolling uses clamped app scroll behavior', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(402, 874));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const MoneyApp());
+    await tester.pumpAndSettle();
+
+    final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    final scrollBehavior = materialApp.scrollBehavior;
+
+    expect(scrollBehavior, isA<AppScrollBehavior>());
+    expect(scrollBehavior!.dragDevices, contains(PointerDeviceKind.mouse));
+    expect(scrollBehavior.dragDevices, contains(PointerDeviceKind.trackpad));
+    expect(
+      scrollBehavior.getScrollPhysics(tester.element(find.byType(MaterialApp))),
+      isA<ClampingScrollPhysics>(),
+    );
+
+    await tester.tap(find.byKey(const Key('nav-spending')));
+    await tester.pumpAndSettle();
+
+    final spendingList = tester.widget<ListView>(
+      find.byKey(const PageStorageKey('spending-scroll')),
+    );
+    final position = spendingList.controller!.position;
+    position.pointerScroll(10000);
+    expect(position.pixels, inInclusiveRange(1, 120));
+    position.pointerScroll(-10000);
+    expect(position.pixels, 0);
   });
 
   testWidgets('fixed expenses can be registered', (tester) async {

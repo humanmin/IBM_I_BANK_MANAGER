@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import 'app_widgets.dart';
@@ -7,6 +8,32 @@ import 'models.dart';
 import 'report_screens.dart';
 import 'seed_data.dart';
 import 'product_search_service.dart';
+
+class AppScrollBehavior extends MaterialScrollBehavior {
+  const AppScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => const {
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.trackpad,
+    PointerDeviceKind.stylus,
+  };
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return const ClampingScrollPhysics();
+  }
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+}
 
 class MoneyApp extends StatefulWidget {
   const MoneyApp({this.productSearchGateway, super.key});
@@ -202,6 +229,7 @@ class _MoneyAppState extends State<MoneyApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: '아이뱅크매니저',
+      scrollBehavior: const AppScrollBehavior(),
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(

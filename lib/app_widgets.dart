@@ -206,12 +206,27 @@ class _SavingPlanCardState extends State<SavingPlanCard> {
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
     final cardColor = widget.compact ? mutedBackground : palette.accentSoft;
+    final amountTextStyle = TextStyle(
+      color: palette.text,
+      fontSize: 22,
+      fontWeight: FontWeight.w800,
+      letterSpacing: -0.7,
+    );
+    final amountText = _amountController.text.isEmpty
+        ? '0'
+        : _amountController.text;
+    final extraAmountCharacters = amountText.length > 5
+        ? amountText.length - 5
+        : 0;
+    final amountFieldWidth = (70.0 + extraAmountCharacters * 11)
+        .clamp(70.0, 160.0)
+        .toDouble();
     return SoftCard(
       color: cardColor,
       radius: widget.compact ? 16 : 28,
       padding: const EdgeInsets.all(20),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
             '저축 계획',
@@ -222,7 +237,12 @@ class _SavingPlanCardState extends State<SavingPlanCard> {
             ),
           ),
           const SizedBox(height: 8),
-          Row(
+          Wrap(
+            key: const Key('saving-sentence-wrap'),
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 4,
+            runSpacing: 2,
             children: [
               PopupMenuButton<SavingPeriod>(
                 key: const Key('saving-period-menu'),
@@ -280,25 +300,21 @@ class _SavingPlanCardState extends State<SavingPlanCard> {
                   letterSpacing: -0.7,
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
+              SizedBox(
+                width: amountFieldWidth,
                 child: TextField(
                   key: const Key('saving-amount-field'),
                   controller: _amountController,
                   keyboardType: TextInputType.number,
                   textAlign: TextAlign.center,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  onChanged: (_) => setState(() {}),
                   onSubmitted: (_) => _commitAmount(),
                   onTapOutside: (_) {
                     _commitAmount();
                     FocusManager.instance.primaryFocus?.unfocus();
                   },
-                  style: TextStyle(
-                    color: palette.text,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.7,
-                  ),
+                  style: amountTextStyle,
                   decoration: InputDecoration(
                     isDense: true,
                     contentPadding: const EdgeInsets.only(bottom: 3),
@@ -311,7 +327,6 @@ class _SavingPlanCardState extends State<SavingPlanCard> {
                   ),
                 ),
               ),
-              const SizedBox(width: 4),
               Text(
                 '원을',
                 style: TextStyle(
@@ -321,17 +336,17 @@ class _SavingPlanCardState extends State<SavingPlanCard> {
                   letterSpacing: -0.7,
                 ),
               ),
+              Text(
+                '저축하기',
+                style: TextStyle(
+                  color: palette.text,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.7,
+                  height: 1.4,
+                ),
+              ),
             ],
-          ),
-          Text(
-            '저축하기',
-            style: TextStyle(
-              color: palette.text,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.7,
-              height: 1.4,
-            ),
           ),
         ],
       ),

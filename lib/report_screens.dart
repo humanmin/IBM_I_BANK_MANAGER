@@ -213,6 +213,44 @@ class _InsightCard extends StatelessWidget {
   }
 }
 
+class _BoundedPointerScrollController extends ScrollController {
+  _BoundedPointerScrollController();
+
+  @override
+  ScrollPosition createScrollPosition(
+    ScrollPhysics physics,
+    ScrollContext context,
+    ScrollPosition? oldPosition,
+  ) {
+    return _BoundedPointerScrollPosition(
+      physics: physics,
+      context: context,
+      initialPixels: initialScrollOffset,
+      keepScrollOffset: keepScrollOffset,
+      oldPosition: oldPosition,
+      debugLabel: debugLabel,
+    );
+  }
+}
+
+class _BoundedPointerScrollPosition extends ScrollPositionWithSingleContext {
+  _BoundedPointerScrollPosition({
+    required super.physics,
+    required super.context,
+    required super.initialPixels,
+    required super.keepScrollOffset,
+    super.oldPosition,
+    super.debugLabel,
+  });
+
+  static const _maximumDelta = 120.0;
+
+  @override
+  void pointerScroll(double delta) {
+    super.pointerScroll(delta.clamp(-_maximumDelta, _maximumDelta).toDouble());
+  }
+}
+
 class SpendingScreen extends StatefulWidget {
   const SpendingScreen({
     required this.fixedExpenses,
@@ -235,11 +273,19 @@ class SpendingScreen extends StatefulWidget {
 
 class _SpendingScreenState extends State<SpendingScreen> {
   late final Set<String> _selectedCategories;
+  late final ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
     _selectedCategories = {?widget.initialCategory};
+    _scrollController = _BoundedPointerScrollController();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _openFixedExpenseEditor([FixedExpense? expense]) async {
@@ -304,6 +350,7 @@ class _SpendingScreenState extends State<SpendingScreen> {
         : '지난달과 비슷하게 썼어요';
     return ListView(
       key: const PageStorageKey('spending-scroll'),
+      controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
       children: [
         const SectionHeading('이번 달 소비 통계', subtitle: '숫자가 많을수록, 고칠 점도 보여요'),
