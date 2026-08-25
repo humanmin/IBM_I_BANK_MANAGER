@@ -80,6 +80,7 @@ class SavingsGoal {
   const SavingsGoal({
     required this.name,
     required this.imageAsset,
+    this.imageUrl,
     required this.price,
     required this.saved,
     required this.savingAmount,
@@ -88,6 +89,7 @@ class SavingsGoal {
 
   final String name;
   final String? imageAsset;
+  final String? imageUrl;
   final int price;
   final int saved;
   final int savingAmount;
@@ -96,6 +98,7 @@ class SavingsGoal {
   SavingsGoal copyWith({
     String? name,
     String? imageAsset,
+    String? imageUrl,
     bool clearImage = false,
     int? price,
     int? saved,
@@ -105,6 +108,7 @@ class SavingsGoal {
     return SavingsGoal(
       name: name ?? this.name,
       imageAsset: clearImage ? null : imageAsset ?? this.imageAsset,
+      imageUrl: clearImage ? imageUrl : imageUrl ?? this.imageUrl,
       price: price ?? this.price,
       saved: saved ?? this.saved,
       savingAmount: savingAmount ?? this.savingAmount,
@@ -115,17 +119,77 @@ class SavingsGoal {
 
 @immutable
 class WishItem {
-  const WishItem({required this.id, required this.name, required this.price});
+  const WishItem({
+    required this.id,
+    required this.name,
+    required this.price,
+    required this.imageUrl,
+    required this.productUrl,
+    required this.source,
+  });
 
   final String id;
   final String name;
   final int price;
+  final String imageUrl;
+  final String productUrl;
+  final String source;
 
-  WishItem copyWith({String? name, int? price}) {
+  WishItem copyWith({
+    String? name,
+    int? price,
+    String? imageUrl,
+    String? productUrl,
+    String? source,
+  }) {
     return WishItem(
       id: id,
       name: name ?? this.name,
       price: price ?? this.price,
+      imageUrl: imageUrl ?? this.imageUrl,
+      productUrl: productUrl ?? this.productUrl,
+      source: source ?? this.source,
+    );
+  }
+}
+
+@immutable
+class ProductSearchResult {
+  const ProductSearchResult({
+    required this.id,
+    required this.name,
+    required this.price,
+    required this.imageUrl,
+    required this.productUrl,
+    required this.source,
+  });
+
+  final String id;
+  final String name;
+  final int price;
+  final String imageUrl;
+  final String productUrl;
+  final String source;
+
+  factory ProductSearchResult.fromJson(Map<String, dynamic> json) {
+    return ProductSearchResult(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      price: (json['price'] as num).round(),
+      imageUrl: json['imageUrl'] as String? ?? '',
+      productUrl: json['productUrl'] as String? ?? '',
+      source: json['source'] as String? ?? '온라인 쇼핑',
+    );
+  }
+
+  WishItem toWishItem({String? wishId}) {
+    return WishItem(
+      id: wishId ?? DateTime.now().microsecondsSinceEpoch.toString(),
+      name: name,
+      price: price,
+      imageUrl: imageUrl,
+      productUrl: productUrl,
+      source: source,
     );
   }
 }

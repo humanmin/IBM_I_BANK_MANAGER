@@ -6,9 +6,12 @@ import 'home_screen.dart';
 import 'models.dart';
 import 'report_screens.dart';
 import 'seed_data.dart';
+import 'product_search_service.dart';
 
 class MoneyApp extends StatefulWidget {
-  const MoneyApp({super.key});
+  const MoneyApp({this.productSearchGateway, super.key});
+
+  final ProductSearchGateway? productSearchGateway;
 
   @override
   State<MoneyApp> createState() => _MoneyAppState();
@@ -22,6 +25,25 @@ class _MoneyAppState extends State<MoneyApp> {
   String? _spendingFilter;
   final List<FixedExpense> _fixedExpenses = [];
   final List<WishItem> _wishItems = [];
+  late final ProductSearchGateway _productSearchGateway;
+  late final bool _ownsProductSearchGateway;
+
+  @override
+  void initState() {
+    super.initState();
+    _ownsProductSearchGateway = widget.productSearchGateway == null;
+    _productSearchGateway =
+        widget.productSearchGateway ?? ProductSearchService();
+  }
+
+  @override
+  void dispose() {
+    if (_ownsProductSearchGateway &&
+        _productSearchGateway is ProductSearchService) {
+      _productSearchGateway.close();
+    }
+    super.dispose();
+  }
 
   AppPalette get _palette => AppPalette.fromChoice(_themeChoice);
 
@@ -74,6 +96,7 @@ class _MoneyAppState extends State<MoneyApp> {
       _goal = _goal.copyWith(
         name: item.name,
         price: item.price,
+        imageUrl: item.imageUrl,
         clearImage: true,
       );
       _activeTab = AppTab.home;
@@ -86,6 +109,7 @@ class _MoneyAppState extends State<MoneyApp> {
       _goal = _goal.copyWith(
         name: item.name,
         price: item.price,
+        imageUrl: item.imageUrl,
         clearImage: true,
       );
       _activeTab = AppTab.home;
@@ -98,8 +122,14 @@ class _MoneyAppState extends State<MoneyApp> {
       if (index == -1) return;
       final previous = _wishItems[index];
       _wishItems[index] = item;
-      if (_goal.imageAsset == null && _goal.name == previous.name) {
-        _goal = _goal.copyWith(name: item.name, price: item.price);
+      if (_goal.imageAsset == null &&
+          _goal.name == previous.name &&
+          _goal.imageUrl == previous.imageUrl) {
+        _goal = _goal.copyWith(
+          name: item.name,
+          price: item.price,
+          imageUrl: item.imageUrl,
+        );
       }
     });
   }
@@ -149,6 +179,7 @@ class _MoneyAppState extends State<MoneyApp> {
       AppTab.shop => ShoppingScreen(
         goal: _goal,
         wishItems: _wishItems,
+        productSearchGateway: _productSearchGateway,
         onPeriodChanged: _changePeriod,
         onAmountChanged: _changeSavingAmount,
         onAddWishItem: _addWishItem,

@@ -89,12 +89,14 @@ class SoftCard extends StatelessWidget {
 class GoalImage extends StatelessWidget {
   const GoalImage({
     required this.imageAsset,
+    this.imageUrl,
     this.size = 72,
     this.radius = 20,
     super.key,
   });
 
   final String? imageAsset;
+  final String? imageUrl;
   final double size;
   final double radius;
 
@@ -102,21 +104,31 @@ class GoalImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
     final asset = imageAsset;
+    final networkUrl = imageUrl;
+    Widget placeholder() => ColoredBox(
+      color: Colors.white.withValues(alpha: 0.7),
+      child: Icon(
+        Icons.card_giftcard_rounded,
+        color: palette.textSoft,
+        size: size * 0.42,
+      ),
+    );
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: SizedBox(
         width: size,
         height: size,
-        child: asset == null
-            ? ColoredBox(
-                color: Colors.white.withValues(alpha: 0.7),
-                child: Icon(
-                  Icons.card_giftcard_rounded,
-                  color: palette.textSoft,
-                  size: size * 0.42,
-                ),
+        child: asset != null
+            ? Image.asset(asset, fit: BoxFit.cover)
+            : networkUrl != null && networkUrl.isNotEmpty
+            ? Image.network(
+                networkUrl,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, progress) =>
+                    progress == null ? child : placeholder(),
+                errorBuilder: (context, error, stackTrace) => placeholder(),
               )
-            : Image.asset(asset, fit: BoxFit.cover),
+            : placeholder(),
       ),
     );
   }

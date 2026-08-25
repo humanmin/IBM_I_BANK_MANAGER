@@ -12,6 +12,8 @@ flutter run
 
 연결된 기기는 `flutter devices`로 확인할 수 있습니다.
 
+상품 검색은 API 키를 APK에 넣지 않기 위해 별도 서버를 사용합니다. 먼저 [server/README.md](server/README.md)에 따라 watsonx.ai와 Google Shopping 검색 서버를 실행하세요.
+
 ## 확인
 
 ```powershell
@@ -35,6 +37,7 @@ APK는 `build\app\outputs\flutter-apk\app-release.apk`에 생성됩니다.
 - 월간 소비 통계와 카테고리 필터
 - 구독·고정지출 직접 등록·수정·삭제
 - 소비 피드백
-- 직접 입력형 위시리스트와 저축 목표 변경
-- AI 가격 자동 찾기 후순위 안내
+- watsonx AI로 검색 의도·예산 해석
+- 실제 온라인 상품 사진·상품명·가격 검색 및 선택
+- 검색 상품을 위시리스트와 저축 목표로 연결
 - 실제 결제가 발생하지 않는 데모 결제 흐름

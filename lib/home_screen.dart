@@ -262,7 +262,7 @@ class _GoalCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              GoalImage(imageAsset: goal.imageAsset),
+              GoalImage(imageAsset: goal.imageAsset, imageUrl: goal.imageUrl),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(

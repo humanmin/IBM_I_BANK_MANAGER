@@ -1,15 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import 'app_widgets.dart';
 import 'models.dart';
 import 'money_utils.dart';
+import 'product_search_service.dart';
 import 'seed_data.dart';
 
 class ShoppingScreen extends StatefulWidget {
   const ShoppingScreen({
     required this.goal,
     required this.wishItems,
+    required this.productSearchGateway,
     required this.onPeriodChanged,
     required this.onAmountChanged,
     required this.onAddWishItem,
@@ -21,6 +24,7 @@ class ShoppingScreen extends StatefulWidget {
 
   final SavingsGoal goal;
   final List<WishItem> wishItems;
+  final ProductSearchGateway productSearchGateway;
   final ValueChanged<SavingPeriod> onPeriodChanged;
   final ValueChanged<int> onAmountChanged;
   final ValueChanged<WishItem> onAddWishItem;
@@ -45,7 +49,10 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
       ),
       builder: (context) => ThemeScope(
         palette: palette,
-        child: _WishItemEditor(item: item),
+        child: _WishItemEditor(
+          item: item,
+          productSearchGateway: widget.productSearchGateway,
+        ),
       ),
     );
     if (result == null || !mounted) return;
@@ -109,6 +116,7 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
             children: [
               GoalImage(
                 imageAsset: widget.goal.imageAsset,
+                imageUrl: widget.goal.imageUrl,
                 size: 56,
                 radius: 16,
               ),
@@ -149,7 +157,7 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
             key: const Key('add-wish-button'),
             onPressed: _openEditor,
             icon: const Icon(Icons.add_rounded),
-            label: const Text('갖고 싶은 것 추가'),
+            label: const Text('상품 검색해서 추가'),
             style: FilledButton.styleFrom(
               backgroundColor: palette.accent,
               foregroundColor: palette.text,
@@ -181,7 +189,7 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'AI로 가격 자동 찾기',
+                      'watsonx AI 상품 검색',
                       style: TextStyle(
                         color: palette.textSoft,
                         fontSize: 13,
@@ -189,15 +197,15 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
                       ),
                     ),
                     Text(
-                      '후순위 기능 · 준비 중',
+                      '검색어를 이해하고 실제 상품 정보를 찾아요',
                       style: TextStyle(color: palette.textMuted, fontSize: 11),
                     ),
                   ],
                 ),
               ),
-              const Icon(
-                Icons.lock_clock_outlined,
-                color: Color(0xFFAAAAAA),
+              Icon(
+                Icons.check_circle_outline,
+                color: palette.textSoft,
                 size: 18,
               ),
             ],
@@ -252,7 +260,8 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
                 selected:
                     widget.goal.imageAsset == null &&
                     widget.goal.name == item.name &&
-                    widget.goal.price == item.price,
+                    widget.goal.price == item.price &&
+                    widget.goal.imageUrl == item.imageUrl,
                 dailyRate: dailySavingRate(widget.goal),
                 onSelect: () => widget.onSelectWishItem(item),
                 onEdit: () => _openEditor(item),
@@ -294,14 +303,11 @@ class _WishItemCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Icon(Icons.card_giftcard_rounded, color: palette.textSoft),
+          GoalImage(
+            imageAsset: null,
+            imageUrl: item.imageUrl,
+            size: 48,
+            radius: 13,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -323,8 +329,12 @@ class _WishItemCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    '${formatWon(item.price)} · ${daysToAfford(item.price, dailyRate)}일 예상',
+                    '${formatWon(item.price)} · ${item.source}',
                     style: TextStyle(color: palette.textSoft, fontSize: 12),
+                  ),
+                  Text(
+                    '${daysToAfford(item.price, dailyRate)}일 예상',
+                    style: TextStyle(color: palette.textMuted, fontSize: 11),
                   ),
                 ],
               ),
@@ -351,128 +361,283 @@ class _WishItemCard extends StatelessWidget {
 }
 
 class _WishItemEditor extends StatefulWidget {
-  const _WishItemEditor({this.item});
+  const _WishItemEditor({required this.productSearchGateway, this.item});
 
   final WishItem? item;
+  final ProductSearchGateway productSearchGateway;
 
   @override
   State<_WishItemEditor> createState() => _WishItemEditorState();
 }
 
 class _WishItemEditorState extends State<_WishItemEditor> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _nameController;
-  late final TextEditingController _priceController;
+  late final TextEditingController _queryController;
+  Timer? _debounce;
+  List<ProductSearchResult> _results = const [];
+  bool _loading = false;
+  bool _searched = false;
+  String? _error;
+  int _requestId = 0;
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.item?.name ?? '');
-    _priceController = TextEditingController(
-      text: widget.item == null ? '' : '${widget.item!.price}',
-    );
+    _queryController = TextEditingController(text: widget.item?.name ?? '');
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _priceController.dispose();
+    _debounce?.cancel();
+    _queryController.dispose();
     super.dispose();
   }
 
-  void _save() {
-    if (!_formKey.currentState!.validate()) return;
-    Navigator.pop(
-      context,
-      WishItem(
-        id: widget.item?.id ?? DateTime.now().microsecondsSinceEpoch.toString(),
-        name: _nameController.text.trim(),
-        price: int.parse(_priceController.text),
-      ),
-    );
+  void _scheduleSearch(String value) {
+    _debounce?.cancel();
+    if (value.trim().length < 2) return;
+    _debounce = Timer(const Duration(milliseconds: 650), _search);
+  }
+
+  Future<void> _search() async {
+    _debounce?.cancel();
+    final query = _queryController.text.trim();
+    if (query.length < 2) {
+      setState(() {
+        _error = '두 글자 이상 입력해 주세요.';
+        _results = const [];
+      });
+      return;
+    }
+
+    final requestId = ++_requestId;
+    setState(() {
+      _loading = true;
+      _searched = true;
+      _error = null;
+    });
+    try {
+      final results = await widget.productSearchGateway.search(query);
+      if (!mounted || requestId != _requestId) return;
+      setState(() => _results = results);
+    } on ProductSearchException catch (error) {
+      if (!mounted || requestId != _requestId) return;
+      setState(() {
+        _results = const [];
+        _error = error.message;
+      });
+    } catch (_) {
+      if (!mounted || requestId != _requestId) return;
+      setState(() {
+        _results = const [];
+        _error = '상품 검색 중 문제가 생겼어요.';
+      });
+    } finally {
+      if (mounted && requestId == _requestId) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  void _select(ProductSearchResult result) {
+    Navigator.pop(context, result.toWishItem(wishId: widget.item?.id));
   }
 
   @override
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
-    return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        24,
-        20,
-        24 + MediaQuery.viewInsetsOf(context).bottom,
+    final availableHeight =
+        MediaQuery.sizeOf(context).height -
+        MediaQuery.viewInsetsOf(context).bottom;
+    final sheetHeight = availableHeight > 760 ? 720.0 : availableHeight * 0.9;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SizedBox(
+        height: sheetHeight,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.item == null ? '상품 검색' : '목표 상품 바꾸기',
+                      style: TextStyle(
+                        color: palette.text,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '닫기',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '이름을 검색하고 사진·상품명·가격을 확인해 선택하세요.',
+                style: TextStyle(color: palette.textMuted, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                key: const Key('product-search-field'),
+                controller: _queryController,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                onChanged: _scheduleSearch,
+                onSubmitted: (_) => _search(),
+                decoration: InputDecoration(
+                  hintText: '예: 무선 키보드, 에어팟 프로',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: IconButton(
+                    key: const Key('product-search-button'),
+                    tooltip: '검색',
+                    onPressed: _loading ? null : _search,
+                    icon: const Icon(Icons.arrow_forward_rounded),
+                  ),
+                  filled: true,
+                  fillColor: mutedBackground,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Expanded(child: _buildResults(palette)),
+            ],
+          ),
+        ),
       ),
-      child: Form(
-        key: _formKey,
+    );
+  }
+
+  Widget _buildResults(AppPalette palette) {
+    if (_loading) {
+      return Center(
+        key: const Key('product-search-loading'),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              widget.item == null ? '갖고 싶은 것 추가' : '목표 수정',
-              style: TextStyle(
-                color: palette.text,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '물건 이름과 예상 가격을 입력해 주세요.',
-              style: TextStyle(color: palette.textMuted, fontSize: 13),
-            ),
-            const SizedBox(height: 20),
-            TextFormField(
-              key: const Key('wish-name-field'),
-              controller: _nameController,
-              autofocus: true,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: '물건 이름',
-                hintText: '예: 무선 키보드',
-                border: OutlineInputBorder(),
-              ),
-              validator: (value) => value == null || value.trim().isEmpty
-                  ? '물건 이름을 입력해 주세요'
-                  : null,
-            ),
+            CircularProgressIndicator(color: palette.accent),
             const SizedBox(height: 12),
-            TextFormField(
-              key: const Key('wish-price-field'),
-              controller: _priceController,
-              keyboardType: TextInputType.number,
-              textInputAction: TextInputAction.done,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              onFieldSubmitted: (_) => _save(),
-              decoration: const InputDecoration(
-                labelText: '예상 가격',
-                suffixText: '원',
-                hintText: '예: 120000',
-                border: OutlineInputBorder(),
-              ),
-              validator: (value) {
-                final price = int.tryParse(value ?? '');
-                return price == null || price < 1 ? '1원 이상의 가격을 입력해 주세요' : null;
-              },
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                key: const Key('save-wish-button'),
-                onPressed: _save,
-                style: FilledButton.styleFrom(
-                  backgroundColor: palette.accent,
-                  foregroundColor: palette.text,
-                  minimumSize: const Size.fromHeight(52),
-                  textStyle: const TextStyle(fontWeight: FontWeight.w800),
-                ),
-                child: const Text('저장하고 목표로 설정'),
-              ),
+            Text(
+              'watsonx AI가 상품을 찾고 있어요',
+              style: TextStyle(color: palette.textSoft, fontSize: 13),
             ),
           ],
         ),
-      ),
+      );
+    }
+    if (_error case final error?) {
+      return Center(
+        key: const Key('product-search-error'),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.wifi_off_rounded, color: palette.textMuted, size: 34),
+            const SizedBox(height: 10),
+            Text(
+              error,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: palette.textSoft, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            TextButton(onPressed: _search, child: const Text('다시 검색')),
+          ],
+        ),
+      );
+    }
+    if (_results.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _searched ? Icons.search_off_rounded : Icons.travel_explore,
+              color: palette.textMuted,
+              size: 38,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              _searched ? '검색된 상품이 없어요' : '찾고 싶은 물건을 입력해 주세요',
+              style: TextStyle(color: palette.textSoft, fontSize: 13),
+            ),
+          ],
+        ),
+      );
+    }
+    return ListView.separated(
+      itemCount: _results.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 9),
+      itemBuilder: (context, index) {
+        final result = _results[index];
+        return Material(
+          color: mutedBackground,
+          borderRadius: BorderRadius.circular(17),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: Key('product-result-${result.id}'),
+            onTap: () => _select(result),
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: Row(
+                children: [
+                  GoalImage(
+                    imageAsset: null,
+                    imageUrl: result.imageUrl,
+                    size: 64,
+                    radius: 14,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          result.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: palette.text,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            height: 1.3,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          result.source,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: palette.textMuted,
+                            fontSize: 11,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          formatWon(result.price),
+                          style: TextStyle(
+                            color: palette.text,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: palette.textMuted),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -621,7 +786,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
           const SizedBox(height: 28),
           Row(
             children: [
-              GoalImage(imageAsset: widget.goal.imageAsset),
+              GoalImage(
+                imageAsset: widget.goal.imageAsset,
+                imageUrl: widget.goal.imageUrl,
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
