@@ -67,7 +67,7 @@ class ProductSearchService implements ProductSearchGateway {
       throw const ProductSearchException('검색 서버 응답을 읽을 수 없어요.');
     } catch (_) {
       throw const ProductSearchException(
-        '상품 검색 서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.',
+        '상품 검색 서버에 연결할 수 없어요. PC 서버 실행과 휴대폰 연결을 확인해 주세요.',
       );
     }
   }

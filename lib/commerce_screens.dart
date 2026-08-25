@@ -381,7 +381,7 @@ class _WishItemEditorState extends State<_WishItemEditor> {
   void _scheduleSearch(String value) {
     _debounce?.cancel();
     if (value.trim().length < 2) return;
-    _debounce = Timer(const Duration(milliseconds: 650), _search);
+    _debounce = Timer(const Duration(milliseconds: 400), _search);
   }
 
   Future<void> _search() async {

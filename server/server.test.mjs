@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { normalizeIntent, normalizeShoppingResults } from './server.mjs';
+import {
+  normalizeIntent,
+  normalizeShoppingResults,
+  shouldInterpretQuery,
+} from './server.mjs';
 
 test('normalizes watsonx search intent without inventing a price', () => {
   assert.deepEqual(
@@ -15,6 +19,13 @@ test('normalizes watsonx search intent without inventing a price', () => {
     searchQuery: '무선 키보드',
     maxPrice: null,
   });
+});
+
+test('uses watsonx only when a query needs budget interpretation', () => {
+  assert.equal(shouldInterpretQuery('독거미 키보드'), false);
+  assert.equal(shouldInterpretQuery('게임용 무선 키보드'), false);
+  assert.equal(shouldInterpretQuery('10만원 이하 무선 키보드'), true);
+  assert.equal(shouldInterpretQuery('예산 안에서 살 수 있는 헤드폰'), true);
 });
 
 test('maps live shopping fields and filters invalid or over-budget items', () => {

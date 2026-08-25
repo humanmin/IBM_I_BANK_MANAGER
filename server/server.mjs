@@ -4,6 +4,12 @@ import { pathToFileURL } from 'node:url';
 const iamTokenUrl = 'https://iam.cloud.ibm.com/identity/token';
 let cachedIamToken;
 let cachedIamTokenExpiry = 0;
+const searchCache = new Map();
+const inFlightSearches = new Map();
+const configuredCacheTtl = Number(process.env.SEARCH_CACHE_TTL_MS || 300_000);
+const searchCacheTtlMs = Number.isFinite(configuredCacheTtl)
+  ? Math.max(0, configuredCacheTtl)
+  : 300_000;
 
 function requireSetting(name) {
   const value = process.env[name]?.trim();
@@ -59,6 +65,12 @@ export function normalizeIntent(value, fallbackQuery) {
       ? Math.round(parsedMaxPrice)
       : null,
   };
+}
+
+export function shouldInterpretQuery(query) {
+  return /(?:예산|이하|미만|이내|최대|가격대|[\d,]+\s*(?:천|만)?\s*원)/.test(
+    query,
+  );
 }
 
 async function interpretQuery(query) {
@@ -144,6 +156,38 @@ async function searchShopping(intent) {
   return normalizeShoppingResults(data, intent.maxPrice);
 }
 
+async function searchProducts(query) {
+  const cacheKey = query.trim().toLocaleLowerCase('ko-KR');
+  const cached = searchCache.get(cacheKey);
+  if (cached && Date.now() - cached.savedAt < searchCacheTtlMs) {
+    return cached.value;
+  }
+
+  const inFlight = inFlightSearches.get(cacheKey);
+  if (inFlight) return inFlight;
+
+  const search = (async () => {
+    const intent = shouldInterpretQuery(query)
+      ? await interpretQuery(query)
+      : normalizeIntent(null, query);
+    const items = await searchShopping(intent);
+    const value = { query: intent.searchQuery, items };
+
+    if (searchCache.size >= 100) {
+      searchCache.delete(searchCache.keys().next().value);
+    }
+    searchCache.set(cacheKey, { savedAt: Date.now(), value });
+    return value;
+  })();
+
+  inFlightSearches.set(cacheKey, search);
+  try {
+    return await search;
+  } finally {
+    inFlightSearches.delete(cacheKey);
+  }
+}
+
 async function handleRequest(request, response) {
   if (request.method === 'OPTIONS') {
     response.writeHead(204, {
@@ -183,9 +227,8 @@ async function handleRequest(request, response) {
   }
 
   try {
-    const intent = await interpretQuery(query);
-    const items = await searchShopping(intent);
-    sendJson(response, 200, { query: intent.searchQuery, items });
+    const result = await searchProducts(query);
+    sendJson(response, 200, result);
   } catch (error) {
     const statusCode = error instanceof ConfigurationError ? 503 : 502;
     sendJson(response, statusCode, {

@@ -33,6 +33,10 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Generated macOS files when the macOS platform is not tracked
+/macos/Flutter/ephemeral/
+/macos/Flutter/GeneratedPluginRegistrant.swift
+
 # Symbolication related
 app.*.symbols
 

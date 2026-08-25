@@ -12,6 +12,29 @@ flutter run
 
 연결된 기기는 `flutter devices`로 확인할 수 있습니다.
 
+### 실제 Android 휴대폰에서 실행
+
+1. 휴대폰의 개발자 옵션과 USB 디버깅을 켭니다.
+2. USB로 PC에 연결하고 휴대폰에 나타나는 디버깅 허용 창을 승인합니다.
+3. 첫 번째 터미널에서 상품 검색 서버를 실행합니다.
+
+```powershell
+cd C:\IBM_I_BANK_MANAGER
+node --env-file=server\.env server\server.mjs
+```
+
+4. 두 번째 터미널에서 휴대폰 실행 스크립트를 실행합니다.
+
+```powershell
+cd C:\IBM_I_BANK_MANAGER
+.\run_phone.bat
+```
+
+휴대폰이 여러 대 연결되어 있다면 `flutter devices`에서 ID를 확인해
+`.\run_phone.bat 휴대폰_ID`로 실행합니다. 이 스크립트는 USB 포트 전달을 설정하므로
+휴대폰이 에뮬레이터 전용 주소 `10.0.2.2`를 사용하지 않고 PC의 검색 서버에 연결됩니다.
+개발 중에는 USB 연결과 PC의 검색 서버를 유지해야 합니다.
+
 ### Android 17 베타 에뮬레이터
 
 Android 17 베타/16 KB 시스템 이미지에서 검은 화면이 나타나면 Device Manager에서
@@ -26,6 +49,9 @@ Android 17 베타/16 KB 시스템 이미지에서 검은 화면이 나타나면 
 사용하는 것을 권장합니다.
 
 상품 검색은 API 키를 APK에 넣지 않기 위해 별도 서버를 사용합니다. 먼저 [server/README.md](server/README.md)에 따라 watsonx.ai와 Google Shopping 검색 서버를 실행하세요.
+
+일반 상품명은 Google Shopping으로 바로 검색하고, 금액·예산이 포함된 자연어는
+watsonx AI가 해석합니다. 같은 검색어의 결과는 5분간 캐시되어 재검색이 더 빠릅니다.
 
 ## 확인
 

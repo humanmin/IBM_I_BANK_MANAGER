@@ -32,4 +32,16 @@ flutter run -d windows --dart-define=PRODUCT_SEARCH_API_URL=http://localhost:808
 
 Android 에뮬레이터는 기본값 `http://10.0.2.2:8080`을 사용합니다. 실제 휴대폰은 PC와 같은 Wi-Fi에 연결한 뒤 `localhost` 대신 PC의 내부 IP를 지정합니다.
 
+USB로 연결한 실제 Android 휴대폰은 프로젝트 루트의 `run_phone.bat`을 사용하면
+`adb reverse`가 자동으로 설정됩니다. 이 방법은 Windows 방화벽이나 PC 내부 IP를
+따로 설정할 필요가 없습니다.
+
+```powershell
+.\run_phone.bat
+```
+
+일반 상품명 검색은 SerpApi로 바로 전달해 응답 시간을 줄이고, 금액이나 예산이
+포함된 검색어만 watsonx AI로 해석합니다. 동일 검색어는 기본 5분 동안 메모리에
+캐시하며 `SEARCH_CACHE_TTL_MS`로 시간을 조정할 수 있습니다.
+
 운영 환경에서는 이 서버를 HTTPS로 배포하고 Secret Manager를 사용하세요.
