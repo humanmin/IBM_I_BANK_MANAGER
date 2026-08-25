@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-search-server
+  labels:
+    app: product-search-server
+  annotations:
+    # ImageStream의 :latest 태그가 바뀌면 OpenShift가 자동으로 롤아웃합니다.
+    # 파이프라인은 이미지를 ImageStream에 push만 하면 되고, 별도로
+    # Deployment를 건드릴 필요가 없습니다.
+    image.openshift.io/triggers: >-
+      [{"from":{"kind":"ImageStreamTag","name":"product-search-server:latest"},
+        "fieldPath":"spec.template.spec.containers[0].image"}]
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: product-search-server
+  template:
+    metadata:
+      labels:
+        app: product-search-server
+    spec:
+      containers:
+        - name: server
+          # 최초 배포 시 ImageStream이 채워질 placeholder. 이후에는 위 트리거가 관리.
+          image: image-registry.openshift-image-registry.svc:5000/CHANGE_ME_NAMESPACE/product-search-server:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: product-search-server-config
+            - secretRef:
+                name: product-search-server-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
