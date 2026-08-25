@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: product-search-server-config
+  labels:
+    app: product-search-server
+data:
+  PORT: "8080"
+  WATSONX_API_VERSION: "2023-10-25"
+  # TODO: 배포 후 실제 Flutter 앱/웹 오리진으로 제한 (지금은 데모용 전체 허용)
+  ALLOWED_ORIGIN: "*"
