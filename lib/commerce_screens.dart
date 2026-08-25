@@ -43,10 +43,6 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
       builder: (context) => ThemeScope(
         palette: palette,
         child: _WishItemEditor(
@@ -66,19 +62,9 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
   Future<void> _confirmDelete(WishItem item) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('목표를 삭제할까요?'),
-        content: Text('${item.name}을 위시리스트에서 삭제해요.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('삭제'),
-          ),
-        ],
+      builder: (context) => AppDeleteDialog(
+        title: '목표를 삭제할까요?',
+        message: '${item.name}을 위시리스트에서 삭제해요.',
       ),
     );
     if (confirmed == true) widget.onDeleteWishItem(item);
@@ -458,31 +444,13 @@ class _WishItemEditorState extends State<_WishItemEditor> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.item == null ? '상품 검색' : '목표 상품 바꾸기',
-                      style: TextStyle(
-                        color: palette.text,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: '닫기',
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ],
+              AppSheetHeader(
+                icon: Icons.travel_explore_rounded,
+                title: widget.item == null ? '상품 검색' : '목표 상품 바꾸기',
+                subtitle: '사진·상품명·가격을 비교하고 원하는 상품을 선택하세요.',
+                onClose: () => Navigator.pop(context),
               ),
-              const SizedBox(height: 4),
-              Text(
-                '이름을 검색하고 사진·상품명·가격을 확인해 선택하세요.',
-                style: TextStyle(color: palette.textMuted, fontSize: 13),
-              ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               TextField(
                 key: const Key('product-search-field'),
                 controller: _queryController,
@@ -493,17 +461,19 @@ class _WishItemEditorState extends State<_WishItemEditor> {
                 decoration: InputDecoration(
                   hintText: '예: 무선 키보드, 에어팟 프로',
                   prefixIcon: const Icon(Icons.search_rounded),
-                  suffixIcon: IconButton(
-                    key: const Key('product-search-button'),
-                    tooltip: '검색',
-                    onPressed: _loading ? null : _search,
-                    icon: const Icon(Icons.arrow_forward_rounded),
-                  ),
-                  filled: true,
-                  fillColor: mutedBackground,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
+                  suffixIcon: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: IconButton.filled(
+                      key: const Key('product-search-button'),
+                      tooltip: '검색',
+                      onPressed: _loading ? null : _search,
+                      style: IconButton.styleFrom(
+                        backgroundColor: palette.accent,
+                        foregroundColor: palette.text,
+                        disabledBackgroundColor: palette.accentTrack,
+                      ),
+                      icon: const Icon(Icons.arrow_forward_rounded),
+                    ),
                   ),
                 ),
               ),

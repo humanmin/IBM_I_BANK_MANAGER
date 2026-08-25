@@ -35,6 +35,153 @@ class AppScrollBehavior extends MaterialScrollBehavior {
   }
 }
 
+ThemeData _buildAppTheme(AppPalette palette) {
+  final colorScheme =
+      ColorScheme.fromSeed(
+        seedColor: palette.accent,
+        brightness: Brightness.light,
+      ).copyWith(
+        primary: palette.accent,
+        onPrimary: palette.text,
+        secondary: palette.accentSoft,
+        onSecondary: palette.text,
+        surface: Colors.white,
+        onSurface: palette.text,
+        outline: palette.accentBorder,
+        outlineVariant: dividerColor,
+      );
+  final fieldBorder = OutlineInputBorder(
+    borderRadius: BorderRadius.circular(18),
+    borderSide: BorderSide(color: palette.accentBorder),
+  );
+  final focusedFieldBorder = OutlineInputBorder(
+    borderRadius: BorderRadius.circular(18),
+    borderSide: BorderSide(color: palette.textSoft, width: 1.6),
+  );
+  const errorColor = Color(0xFFB94747);
+
+  return ThemeData(
+    useMaterial3: true,
+    colorScheme: colorScheme,
+    scaffoldBackgroundColor: palette.pageBackground,
+    textTheme: ThemeData.light().textTheme.apply(
+      bodyColor: palette.text,
+      displayColor: palette.text,
+      fontFamily: 'sans-serif',
+    ),
+    inputDecorationTheme: InputDecorationThemeData(
+      filled: true,
+      fillColor: const Color(0xFFF6F8F6),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+      labelStyle: TextStyle(
+        color: palette.textSoft,
+        fontWeight: FontWeight.w700,
+      ),
+      floatingLabelStyle: TextStyle(
+        color: palette.textSoft,
+        fontWeight: FontWeight.w800,
+      ),
+      hintStyle: TextStyle(color: palette.textMuted, fontSize: 14),
+      prefixIconColor: palette.textMuted,
+      suffixIconColor: palette.textSoft,
+      suffixStyle: TextStyle(
+        color: palette.textSoft,
+        fontWeight: FontWeight.w700,
+      ),
+      border: fieldBorder,
+      enabledBorder: fieldBorder,
+      focusedBorder: focusedFieldBorder,
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: errorColor),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: errorColor, width: 1.6),
+      ),
+      errorStyle: const TextStyle(
+        color: errorColor,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      elevation: 18,
+      shadowColor: const Color(0x330F2217),
+      barrierColor: const Color(0x99101D14),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(28),
+        side: BorderSide(color: palette.accentBorder),
+      ),
+      titleTextStyle: TextStyle(
+        color: palette.text,
+        fontSize: 20,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.4,
+      ),
+      contentTextStyle: TextStyle(
+        color: palette.textSoft,
+        fontSize: 14,
+        height: 1.5,
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: Colors.white,
+      modalBackgroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      modalBarrierColor: const Color(0x99101D14),
+      modalElevation: 18,
+      shadowColor: const Color(0x330F2217),
+      showDragHandle: true,
+      dragHandleColor: palette.accentBorder,
+      dragHandleSize: const Size(42, 4),
+      clipBehavior: Clip.antiAlias,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      elevation: 12,
+      shadowColor: const Color(0x2E0F2217),
+      position: PopupMenuPosition.under,
+      menuPadding: const EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: palette.accentBorder),
+      ),
+      textStyle: TextStyle(color: palette.text, fontSize: 14),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: palette.accent,
+        foregroundColor: palette.text,
+        minimumSize: const Size(44, 50),
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        textStyle: const TextStyle(fontWeight: FontWeight.w800),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: palette.textSoft,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        textStyle: const TextStyle(fontWeight: FontWeight.w800),
+      ),
+    ),
+    textSelectionTheme: TextSelectionThemeData(
+      cursorColor: palette.textSoft,
+      selectionColor: palette.accent.withValues(alpha: 0.45),
+      selectionHandleColor: palette.textSoft,
+    ),
+    splashFactory: InkRipple.splashFactory,
+  );
+}
+
 class MoneyApp extends StatefulWidget {
   const MoneyApp({this.productSearchGateway, super.key});
 
@@ -230,20 +377,7 @@ class _MoneyAppState extends State<MoneyApp> {
       debugShowCheckedModeBanner: false,
       title: '아이뱅크매니저',
       scrollBehavior: const AppScrollBehavior(),
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: palette.accent,
-          brightness: Brightness.light,
-        ),
-        scaffoldBackgroundColor: palette.pageBackground,
-        textTheme: ThemeData.light().textTheme.apply(
-          bodyColor: palette.text,
-          displayColor: palette.text,
-          fontFamily: 'sans-serif',
-        ),
-        splashFactory: InkRipple.splashFactory,
-      ),
+      theme: _buildAppTheme(palette),
       home: ThemeScope(
         palette: palette,
         child: PopScope(

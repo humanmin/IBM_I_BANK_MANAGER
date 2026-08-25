@@ -40,6 +40,121 @@ class SectionHeading extends StatelessWidget {
   }
 }
 
+class AppSheetHeader extends StatelessWidget {
+  const AppSheetHeader({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onClose,
+    super.key,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = ThemeScope.paletteOf(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: palette.accentSoft,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: palette.accentBorder),
+          ),
+          child: Icon(icon, color: palette.textSoft, size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: palette.text,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: palette.textMuted,
+                  fontSize: 12,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton(
+          tooltip: '닫기',
+          onPressed: onClose,
+          style: IconButton.styleFrom(
+            backgroundColor: mutedBackground,
+            foregroundColor: palette.textSoft,
+          ),
+          icon: const Icon(Icons.close_rounded),
+        ),
+      ],
+    );
+  }
+}
+
+class AppDeleteDialog extends StatelessWidget {
+  const AppDeleteDialog({
+    required this.title,
+    required this.message,
+    super.key,
+  });
+
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return AlertDialog(
+      icon: Container(
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          color: colors.errorContainer,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(Icons.delete_outline_rounded, color: colors.error),
+      ),
+      title: Text(title, textAlign: TextAlign.center),
+      content: Text(message, textAlign: TextAlign.center),
+      actionsAlignment: MainAxisAlignment.center,
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('취소'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: FilledButton.styleFrom(
+            backgroundColor: colors.error,
+            foregroundColor: colors.onError,
+          ),
+          child: const Text('삭제'),
+        ),
+      ],
+    );
+  }
+}
+
 class SoftCard extends StatelessWidget {
   const SoftCard({
     required this.child,
@@ -239,7 +354,7 @@ class _SavingPlanCardState extends State<SavingPlanCard> {
           const SizedBox(height: 8),
           Wrap(
             key: const Key('saving-sentence-wrap'),
-            alignment: WrapAlignment.center,
+            alignment: WrapAlignment.start,
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 4,
             runSpacing: 2,
@@ -248,17 +363,29 @@ class _SavingPlanCardState extends State<SavingPlanCard> {
                 key: const Key('saving-period-menu'),
                 initialValue: widget.goal.savingPeriod,
                 onSelected: widget.onPeriodChanged,
-                color: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
+                offset: const Offset(0, 8),
                 itemBuilder: (context) => SavingPeriod.values
                     .map(
                       (period) => PopupMenuItem(
                         value: period,
-                        child: Text(
-                          period.label,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        height: 48,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                period.label,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            if (period == widget.goal.savingPeriod)
+                              Icon(
+                                Icons.check_circle_rounded,
+                                color: palette.textSoft,
+                                size: 19,
+                              ),
+                          ],
                         ),
                       ),
                     )
@@ -317,7 +444,11 @@ class _SavingPlanCardState extends State<SavingPlanCard> {
                   style: amountTextStyle,
                   decoration: InputDecoration(
                     isDense: true,
+                    filled: false,
                     contentPadding: const EdgeInsets.only(bottom: 3),
+                    border: UnderlineInputBorder(
+                      borderSide: BorderSide(color: palette.text, width: 2),
+                    ),
                     enabledBorder: UnderlineInputBorder(
                       borderSide: BorderSide(color: palette.text, width: 2),
                     ),

@@ -294,10 +294,6 @@ class _SpendingScreenState extends State<SpendingScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
       builder: (context) => ThemeScope(
         palette: palette,
         child: _FixedExpenseEditor(expense: expense),
@@ -314,19 +310,9 @@ class _SpendingScreenState extends State<SpendingScreen> {
   Future<void> _confirmFixedExpenseDelete(FixedExpense expense) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('고정지출을 삭제할까요?'),
-        content: Text('${expense.name}을 목록에서 삭제해요.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('삭제'),
-          ),
-        ],
+      builder: (context) => AppDeleteDialog(
+        title: '고정지출을 삭제할까요?',
+        message: '${expense.name}을 목록에서 삭제해요.',
       ),
     );
     if (confirmed == true) widget.onDeleteFixedExpense(expense);
@@ -842,20 +828,13 @@ class _FixedExpenseEditorState extends State<_FixedExpenseEditor> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              widget.expense == null ? '고정지출 등록' : '고정지출 수정',
-              style: TextStyle(
-                color: palette.text,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-              ),
+            AppSheetHeader(
+              icon: Icons.receipt_long_rounded,
+              title: widget.expense == null ? '고정지출 등록' : '고정지출 수정',
+              subtitle: '구독, 통신비, 관리비, 월세를 한곳에서 관리하세요.',
+              onClose: () => Navigator.pop(context),
             ),
-            const SizedBox(height: 6),
-            Text(
-              '구독, 통신비, 관리비, 월세 등을 등록해 보세요.',
-              style: TextStyle(color: palette.textMuted, fontSize: 13),
-            ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             TextFormField(
               key: const Key('fixed-name-field'),
               controller: _nameController,
@@ -864,7 +843,7 @@ class _FixedExpenseEditorState extends State<_FixedExpenseEditor> {
               decoration: const InputDecoration(
                 labelText: '지출 이름',
                 hintText: '예: 넷플릭스',
-                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.edit_note_rounded),
               ),
               validator: (value) => value == null || value.trim().isEmpty
                   ? '지출 이름을 입력해 주세요'
@@ -875,7 +854,7 @@ class _FixedExpenseEditorState extends State<_FixedExpenseEditor> {
               initialValue: _category,
               decoration: const InputDecoration(
                 labelText: '분류',
-                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.category_outlined),
               ),
               items: _fixedExpenseCategories
                   .map(
@@ -903,7 +882,6 @@ class _FixedExpenseEditorState extends State<_FixedExpenseEditor> {
                     decoration: const InputDecoration(
                       labelText: '월 금액',
                       suffixText: '원',
-                      border: OutlineInputBorder(),
                     ),
                     validator: (value) {
                       final amount = int.tryParse(value ?? '');
@@ -925,7 +903,6 @@ class _FixedExpenseEditorState extends State<_FixedExpenseEditor> {
                     decoration: const InputDecoration(
                       labelText: '결제일',
                       suffixText: '일',
-                      border: OutlineInputBorder(),
                     ),
                     validator: (value) {
                       final day = int.tryParse(value ?? '');

@@ -78,7 +78,7 @@ void main() {
     expect(find.text('결제 완료'), findsOneWidget);
   });
 
-  testWidgets('saving action wraps to the next line as a whole', (
+  testWidgets('saving action wraps as a whole and stays left aligned', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(402, 874));
@@ -99,12 +99,11 @@ void main() {
           .abs(),
       lessThan(10),
     );
-    final sentenceCenterX = tester.getCenter(savingSentence).dx;
-    final contentCenterX =
-        (tester.getTopLeft(savingPeriod).dx +
-            tester.getTopRight(savingAction).dx) /
-        2;
-    expect((sentenceCenterX - contentCenterX).abs(), lessThan(2));
+    final sentenceLeftX = tester.getTopLeft(savingSentence).dx;
+    expect(
+      (sentenceLeftX - tester.getTopLeft(savingPeriod).dx).abs(),
+      lessThan(2),
+    );
     expect(
       tester.getTopLeft(savingAction).dx - tester.getTopRight(wonText).dx,
       greaterThanOrEqualTo(3),
@@ -120,10 +119,25 @@ void main() {
     );
     expect(tester.getSize(savingAction).height, lessThan(40));
     expect(
-      (tester.getCenter(savingSentence).dx - tester.getCenter(savingAction).dx)
-          .abs(),
+      (sentenceLeftX - tester.getTopLeft(savingAction).dx).abs(),
       lessThan(2),
     );
+  });
+
+  testWidgets('forms and popups share the polished component theme', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MoneyApp());
+
+    final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    final theme = materialApp.theme!;
+
+    expect(theme.inputDecorationTheme.filled, isTrue);
+    expect(theme.inputDecorationTheme.border, isA<OutlineInputBorder>());
+    expect(theme.dialogTheme.shape, isA<RoundedRectangleBorder>());
+    expect(theme.bottomSheetTheme.showDragHandle, isTrue);
+    expect(theme.popupMenuTheme.shape, isA<RoundedRectangleBorder>());
+    expect(theme.popupMenuTheme.position, PopupMenuPosition.under);
   });
 
   testWidgets('mouse scrolling uses clamped app scroll behavior', (
