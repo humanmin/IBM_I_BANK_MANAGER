@@ -453,7 +453,7 @@ class _SavingPlanCardState extends State<SavingPlanCard> {
                       borderSide: BorderSide(color: palette.text, width: 2),
                     ),
                     focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: palette.text, width: 2),
+                      borderSide: BorderSide(color: palette.text, width: 1),
                     ),
                   ),
                 ),

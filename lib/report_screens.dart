@@ -985,11 +985,8 @@ class _TransactionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
-    return Container(
+    return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: dividerColor)),
-      ),
       child: Row(
         children: [
           Container(
@@ -1027,7 +1024,7 @@ class _TransactionRow extends StatelessWidget {
             ),
           ),
           Text(
-            '-${formatWon(transaction.amount)}',
+            formatWon(transaction.amount.abs()),
             style: TextStyle(
               color: palette.text,
               fontSize: 15,
