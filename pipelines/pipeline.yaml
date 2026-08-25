@@ -1,0 +1,76 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: product-search-server-pipeline
+  labels:
+    app: product-search-server
+spec:
+  params:
+    - name: git-url
+      type: string
+    - name: git-revision
+      type: string
+      default: main
+    - name: namespace
+      type: string
+      description: 이 파이프라인이 배포하는 대상 네임스페이스
+    - name: health-url
+      type: string
+      description: 배포 후 스모크 테스트할 /health 전체 URL
+
+  workspaces:
+    - name: shared-workspace
+
+  tasks:
+    - name: fetch-source
+      taskRef:
+        kind: ClusterTask   # OpenShift Pipelines 오퍼레이터가 기본 제공. 없다면 Tekton Hub에서 설치.
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+      params:
+        - name: url
+          value: $(params.git-url)
+        - name: revision
+          value: $(params.git-revision)
+
+    - name: test
+      runAfter: [fetch-source]
+      taskRef:
+        name: node-test
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    - name: build-and-push
+      runAfter: [test]
+      taskRef:
+        kind: ClusterTask
+        name: buildah
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+      params:
+        - name: IMAGE
+          value: image-registry.openshift-image-registry.svc:5000/$(params.namespace)/product-search-server:latest
+        - name: CONTEXT
+          value: server
+        - name: DOCKERFILE
+          value: ./server/Dockerfile
+
+    - name: wait-for-rollout
+      runAfter: [build-and-push]
+      taskRef:
+        name: rollout-status
+      params:
+        - name: namespace
+          value: $(params.namespace)
+
+    - name: smoke-test
+      runAfter: [wait-for-rollout]
+      taskRef:
+        name: health-check
+      params:
+        - name: url
+          value: $(params.health-url)
