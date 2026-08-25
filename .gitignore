@@ -50,3 +50,7 @@ app.*.map.json
 
 # Local backend secrets
 /server/.env
+
+# OpenShift secret 실제 값 채운 사본에 대한 실수 방지
+openshift/secret.yaml
+pipelines/github-webhook-secret.yaml
