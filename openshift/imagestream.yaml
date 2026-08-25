@@ -1,0 +1,9 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: product-search-server
+  labels:
+    app: product-search-server
+spec:
+  lookupPolicy:
+    local: true
