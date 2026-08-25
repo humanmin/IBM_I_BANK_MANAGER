@@ -1,0 +1,15 @@
+# Tekton Triggers가 EventListener 이름 기준으로 'el-product-search-server'
+# Service를 자동 생성합니다. 그 Service를 GitHub이 호출할 수 있게 Route로 노출합니다.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: el-product-search-server
+spec:
+  to:
+    kind: Service
+    name: el-product-search-server
+  port:
+    targetPort: http-listener
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
