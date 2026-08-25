@@ -1,0 +1,15 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: product-search-server
+  labels:
+    app: product-search-server
+spec:
+  to:
+    kind: Service
+    name: product-search-server
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
