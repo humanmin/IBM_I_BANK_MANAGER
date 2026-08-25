@@ -1,0 +1,18 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: node-test
+  labels:
+    app: product-search-server
+spec:
+  workspaces:
+    - name: source
+  steps:
+    - name: test
+      image: registry.access.redhat.com/ubi9/nodejs-20-minimal
+      workingDir: $(workspaces.source.path)/server
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        # server.test.mjs는 순수 함수만 검증하므로 Secret이 필요 없습니다.
+        node --test
