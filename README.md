@@ -12,6 +12,19 @@ flutter run
 
 연결된 기기는 `flutter devices`로 확인할 수 있습니다.
 
+### Android 17 베타 에뮬레이터
+
+Android 17 베타/16 KB 시스템 이미지에서 검은 화면이 나타나면 Device Manager에서
+해당 AVD의 Graphics를 Software로 설정하고 Cold Boot한 뒤 다음 파일로 실행하세요.
+
+```powershell
+.\run_emulator.bat
+```
+
+이 파일은 에뮬레이터에서 Impeller를 끄고 소프트웨어 렌더링과 로컬 상품 검색 서버
+주소(`10.0.2.2:8080`)를 적용합니다. 가능하면 Android 15 또는 16 안정 시스템 이미지를
+사용하는 것을 권장합니다.
+
 상품 검색은 API 키를 APK에 넣지 않기 위해 별도 서버를 사용합니다. 먼저 [server/README.md](server/README.md)에 따라 watsonx.ai와 Google Shopping 검색 서버를 실행하세요.
 
 ## 확인
