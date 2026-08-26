@@ -40,7 +40,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: '3.44.7'
           cache: true
 
       - name: Install dependencies
@@ -76,13 +76,14 @@ jobs:
         with:
           node-version: '20'
 
-      # server.mjs currently uses only Node built-in modules (no package.json).
-      # If dependencies are introduced later, add:
-      #   - run: npm ci
-      # before the test step.
+      # server/package.json이 추가되면서 firebase-admin 의존성이 생겼습니다.
+      # package-lock.json을 커밋하면 `npm ci`로 바꾸는 걸 권장합니다 (재현성 ↑).
+      - name: Install dependencies
+        run: npm install
+
       - name: Run tests
         run: node --test
 
-      # server.test.mjs only exercises pure functions (normalizeIntent,
-      # normalizeShoppingResults) — no network calls, so no secrets are
-      # required here. Keep new server tests hermetic the same way.
+      # server.test.mjs, token-crypto.test.mjs 모두 순수 함수만 테스트합니다
+      # (실제 Firebase/오픈뱅킹 네트워크 호출 없음) — 이 CI 단계엔 여전히
+      # 어떤 Secret도 필요 없습니다. 새 서버 테스트도 이 원칙을 유지하세요.
