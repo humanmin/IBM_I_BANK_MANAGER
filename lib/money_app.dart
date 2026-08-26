@@ -234,7 +234,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
       _productSearchGateway.close();
     }
     if (_eventGateway is EventService) {
-      (_eventGateway as EventService).close();
+      _eventGateway.close();
     }
     super.dispose();
   }

@@ -18,10 +18,13 @@ abstract interface class AuthGateway {
 }
 
 class FirebaseAuthService implements AuthGateway {
-  FirebaseAuthService({fb.FirebaseAuth? auth})
-    : _auth = auth ?? fb.FirebaseAuth.instance;
+  FirebaseAuthService({fb.FirebaseAuth? auth}) : _auth = auth;
 
-  final fb.FirebaseAuth _auth;
+  final fb.FirebaseAuth? _auth;
+
+  // Firebase가 아직 초기화되지 않은 데모·테스트 환경에서도 앱 자체는
+  // 시작할 수 있도록 SDK 인스턴스는 인증 기능을 실제로 사용할 때 얻습니다.
+  fb.FirebaseAuth get _client => _auth ?? fb.FirebaseAuth.instance;
 
   AppUser? _toAppUser(fb.User? user) {
     if (user == null) return null;
@@ -34,14 +37,14 @@ class FirebaseAuthService implements AuthGateway {
 
   @override
   Stream<AppUser?> authStateChanges() =>
-      _auth.authStateChanges().map(_toAppUser);
+      _client.authStateChanges().map(_toAppUser);
 
   @override
-  AppUser? get currentUser => _toAppUser(_auth.currentUser);
+  AppUser? get currentUser => _toAppUser(_client.currentUser);
 
   @override
   Future<AppUser> signUpWithEmail(String email, String password) async {
-    final credential = await _auth.createUserWithEmailAndPassword(
+    final credential = await _client.createUserWithEmailAndPassword(
       email: email,
       password: password,
     );
@@ -50,7 +53,7 @@ class FirebaseAuthService implements AuthGateway {
 
   @override
   Future<AppUser> signInWithEmail(String email, String password) async {
-    final credential = await _auth.signInWithEmailAndPassword(
+    final credential = await _client.signInWithEmailAndPassword(
       email: email,
       password: password,
     );
@@ -58,10 +61,10 @@ class FirebaseAuthService implements AuthGateway {
   }
 
   @override
-  Future<void> signOut() => _auth.signOut();
+  Future<void> signOut() => _client.signOut();
 
   @override
   Future<String?> currentIdToken() async {
-    return _auth.currentUser?.getIdToken();
+    return _client.currentUser?.getIdToken();
   }
 }
