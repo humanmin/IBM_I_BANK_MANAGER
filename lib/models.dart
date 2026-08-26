@@ -390,3 +390,39 @@ class SpendingStatsData {
 
   int get difference => thisMonthSpent - lastMonthSpent;
 }
+
+@immutable
+class AppUser {
+  const AppUser({required this.uid, this.email, this.displayName});
+
+  final String uid;
+  final String? email;
+  final String? displayName;
+}
+
+@immutable
+class BankAccount {
+  const BankAccount({
+    required this.id,
+    required this.bankName,
+    required this.maskedAccountNumber,
+    required this.balance,
+    this.lastSyncedAt,
+  });
+
+  factory BankAccount.fromJson(Map<String, dynamic> json) {
+    return BankAccount(
+      id: json['id']?.toString() ?? '',
+      bankName: json['bankName']?.toString() ?? '',
+      maskedAccountNumber: json['maskedAccountNumber']?.toString() ?? '',
+      balance: (json['balance'] as num?)?.round() ?? 0,
+      lastSyncedAt: DateTime.tryParse(json['lastSyncedAt']?.toString() ?? ''),
+    );
+  }
+
+  final String id;
+  final String bankName;
+  final String maskedAccountNumber;
+  final int balance;
+  final DateTime? lastSyncedAt;
+}
