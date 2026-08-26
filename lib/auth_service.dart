@@ -25,7 +25,11 @@ class FirebaseAuthService implements AuthGateway {
 
   AppUser? _toAppUser(fb.User? user) {
     if (user == null) return null;
-    return AppUser(uid: user.uid, email: user.email, displayName: user.displayName);
+    return AppUser(
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+    );
   }
 
   @override
@@ -57,5 +61,7 @@ class FirebaseAuthService implements AuthGateway {
   Future<void> signOut() => _auth.signOut();
 
   @override
-  Future<String?> currentIdToken() => _auth.currentUser?.getIdToken();
+  Future<String?> currentIdToken() async {
+    return _auth.currentUser?.getIdToken();
+  }
 }

@@ -92,12 +92,14 @@ class NotificationsScreen extends StatelessWidget {
 class InsightsScreen extends StatelessWidget {
   const InsightsScreen({
     required this.goal,
+    required this.transactions,
     required this.onOpenCategory,
     required this.onSeeGoal,
     super.key,
   });
 
   final SavingsGoal goal;
+  final List<MoneyTransaction> transactions;
   final ValueChanged<String> onOpenCategory;
   final VoidCallback onSeeGoal;
 
@@ -253,6 +255,14 @@ class _BoundedPointerScrollPosition extends ScrollPositionWithSingleContext {
 
 class SpendingScreen extends StatefulWidget {
   const SpendingScreen({
+    required this.accountBalance,
+    required this.transactions,
+    required this.isDemoData,
+    required this.lastUpdated,
+    required this.notificationAccessGranted,
+    required this.onImportAccountData,
+    required this.onSyncNotifications,
+    required this.onOpenNotificationSettings,
     required this.fixedExpenses,
     required this.onAddFixedExpense,
     required this.onUpdateFixedExpense,
@@ -262,6 +272,14 @@ class SpendingScreen extends StatefulWidget {
   });
 
   final String? initialCategory;
+  final int accountBalance;
+  final List<MoneyTransaction> transactions;
+  final bool isDemoData;
+  final DateTime? lastUpdated;
+  final bool notificationAccessGranted;
+  final Future<AccountActionResult> Function() onImportAccountData;
+  final Future<AccountActionResult> Function() onSyncNotifications;
+  final Future<AccountActionResult> Function() onOpenNotificationSettings;
   final List<FixedExpense> fixedExpenses;
   final ValueChanged<FixedExpense> onAddFixedExpense;
   final ValueChanged<FixedExpense> onUpdateFixedExpense;
@@ -274,6 +292,7 @@ class SpendingScreen extends StatefulWidget {
 class _SpendingScreenState extends State<SpendingScreen> {
   late final Set<String> _selectedCategories;
   late final ScrollController _scrollController;
+  bool _accountActionInProgress = false;
 
   @override
   void initState() {
@@ -318,11 +337,38 @@ class _SpendingScreenState extends State<SpendingScreen> {
     if (confirmed == true) widget.onDeleteFixedExpense(expense);
   }
 
+  Future<void> _runAccountAction(
+    Future<AccountActionResult> Function() action,
+  ) async {
+    if (_accountActionInProgress) return;
+    setState(() => _accountActionInProgress = true);
+    final result = await action();
+    if (!mounted) return;
+    setState(() => _accountActionInProgress = false);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(result.message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
-    final stats = spendingStats(transactions, 2026, 8, 2026, 7);
-    final recent = recentTransactions(transactions, 2026, 8);
+    final now = DateTime.now();
+    final previousMonth = DateTime(now.year, now.month - 1);
+    final stats = spendingStats(
+      widget.transactions,
+      now.year,
+      now.month,
+      previousMonth.year,
+      previousMonth.month,
+      asOf: now,
+    );
+    final recent = recentTransactions(widget.transactions, now.year, now.month);
     final visible = _selectedCategories.isEmpty
         ? recent
         : recent
@@ -341,6 +387,20 @@ class _SpendingScreenState extends State<SpendingScreen> {
       children: [
         const SectionHeading('이번 달 소비 통계', subtitle: '숫자가 많을수록, 고칠 점도 보여요'),
         const SizedBox(height: 18),
+        _AccountDataSection(
+          balance: widget.accountBalance,
+          isDemoData: widget.isDemoData,
+          lastUpdated: widget.lastUpdated,
+          notificationAccessGranted: widget.notificationAccessGranted,
+          busy: _accountActionInProgress,
+          onImport: () => _runAccountAction(widget.onImportAccountData),
+          onNotificationAction: () => _runAccountAction(
+            widget.notificationAccessGranted
+                ? widget.onSyncNotifications
+                : widget.onOpenNotificationSettings,
+          ),
+        ),
+        const SizedBox(height: 14),
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -393,7 +453,7 @@ class _SpendingScreenState extends State<SpendingScreen> {
             _StatsTile(label: '하루 평균', value: formatWon(stats.averagePerDay)),
           ],
         ),
-        if (stats.topCategory case final topCategory?) ...[
+        if (stats.topMerchant case final topMerchant?) ...[
           const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.all(16),
@@ -415,19 +475,21 @@ class _SpendingScreenState extends State<SpendingScreen> {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    Text(categoryMeta[topCategory]?.emoji ?? '•'),
-                    const SizedBox(width: 8),
-                    Text(
-                      topCategory,
-                      style: TextStyle(
-                        color: palette.text,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
+                    Expanded(
+                      child: Text(
+                        topMerchant,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: palette.text,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 10),
                     Text(
-                      formatWon(stats.topCategoryAmount),
+                      formatWon(stats.topMerchantAmount),
                       style: TextStyle(
                         color: palette.text,
                         fontSize: 15,
@@ -547,6 +609,176 @@ class _SpendingScreenState extends State<SpendingScreen> {
       widgets.add(_TransactionRow(transaction: item));
     }
     return widgets;
+  }
+}
+
+class _AccountDataSection extends StatelessWidget {
+  const _AccountDataSection({
+    required this.balance,
+    required this.isDemoData,
+    required this.lastUpdated,
+    required this.notificationAccessGranted,
+    required this.busy,
+    required this.onImport,
+    required this.onNotificationAction,
+  });
+
+  final int balance;
+  final bool isDemoData;
+  final DateTime? lastUpdated;
+  final bool notificationAccessGranted;
+  final bool busy;
+  final VoidCallback onImport;
+  final VoidCallback onNotificationAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = ThemeScope.paletteOf(context);
+    final updatedLabel = lastUpdated == null
+        ? '아직 가져온 내역이 없어요'
+        : '마지막 반영 ${lastUpdated!.month}월 ${lastUpdated!.day}일 '
+              '${lastUpdated!.hour.toString().padLeft(2, '0')}:'
+              '${lastUpdated!.minute.toString().padLeft(2, '0')}';
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: palette.accentBorder),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x120F2217),
+            blurRadius: 18,
+            offset: Offset(0, 7),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: palette.accentSoft,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: palette.text,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '내 소비 데이터',
+                      style: TextStyle(
+                        color: palette.text,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      isDemoData ? '예시 데이터로 표시 중' : updatedLabel,
+                      style: TextStyle(color: palette.textMuted, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: isDemoData ? mutedBackground : palette.accentSoft,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  isDemoData ? 'DEMO' : '내 데이터',
+                  style: TextStyle(
+                    color: palette.textSoft,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '현재 잔액',
+            style: TextStyle(
+              color: palette.textSoft,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            formatWon(balance),
+            key: const Key('account-balance-value'),
+            style: TextStyle(
+              color: palette.text,
+              fontSize: 25,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.8,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  key: const Key('import-account-data-button'),
+                  onPressed: busy ? null : onImport,
+                  icon: const Icon(Icons.file_open_outlined, size: 18),
+                  label: const Text('내역 가져오기'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  key: const Key('notification-capture-button'),
+                  onPressed: busy ? null : onNotificationAction,
+                  icon: Icon(
+                    notificationAccessGranted
+                        ? Icons.sync_rounded
+                        : Icons.notifications_active_outlined,
+                    size: 18,
+                  ),
+                  label: Text(
+                    notificationAccessGranted ? '새 알림 반영' : '알림 자동 등록',
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: palette.text,
+                    side: BorderSide(color: palette.accentBorder),
+                    minimumSize: const Size(44, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '토스 계좌를 직접 연결하지 않아요. 선택한 거래내역 파일과 허용 이후의 토스 알림만 이 휴대폰에 저장해요.',
+            style: TextStyle(
+              color: palette.textMuted,
+              fontSize: 11,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1038,12 +1270,20 @@ class _TransactionRow extends StatelessWidget {
 }
 
 class HabitsScreen extends StatelessWidget {
-  const HabitsScreen({super.key});
+  const HabitsScreen({required this.transactions, super.key});
+
+  final List<MoneyTransaction> transactions;
 
   @override
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
-    final categories = categoryTotals(transactions, 2026, 8, categoryMeta);
+    final now = DateTime.now();
+    final categories = categoryTotals(
+      transactions,
+      now.year,
+      now.month,
+      categoryMeta,
+    );
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
       children: [

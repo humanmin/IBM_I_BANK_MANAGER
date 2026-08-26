@@ -10,6 +10,9 @@ class HomeScreen extends StatelessWidget {
     required this.goal,
     required this.themeChoice,
     required this.unreadCount,
+    required this.accountBalance,
+    required this.transactions,
+    required this.isDemoData,
     required this.onThemeChanged,
     required this.onOpenNotifications,
     required this.onPeriodChanged,
@@ -22,6 +25,9 @@ class HomeScreen extends StatelessWidget {
   final SavingsGoal goal;
   final ThemeChoice themeChoice;
   final int unreadCount;
+  final int accountBalance;
+  final List<MoneyTransaction> transactions;
+  final bool isDemoData;
   final ValueChanged<ThemeChoice> onThemeChanged;
   final VoidCallback onOpenNotifications;
   final ValueChanged<SavingPeriod> onPeriodChanged;
@@ -32,6 +38,7 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
+    final now = DateTime.now();
     return SingleChildScrollView(
       key: const PageStorageKey('home-scroll'),
       padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
@@ -59,7 +66,7 @@ class HomeScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '남은 돈',
+                  isDemoData ? '현재 잔액 · 예시 데이터' : '현재 잔액',
                   style: TextStyle(
                     color: palette.textSoft,
                     fontSize: 12,
@@ -68,7 +75,7 @@ class HomeScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  formatWon(remainingBalance),
+                  formatWon(accountBalance),
                   style: TextStyle(
                     color: palette.text,
                     fontSize: 22,
@@ -80,7 +87,7 @@ class HomeScreen extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      '이번 달 지출 ${formatWon(monthSpent(transactions, 2026, 8))}',
+                      '이번 달 지출 ${formatWon(monthSpent(transactions, now.year, now.month))}',
                       style: TextStyle(color: palette.textSoft, fontSize: 12),
                     ),
                     const Spacer(),

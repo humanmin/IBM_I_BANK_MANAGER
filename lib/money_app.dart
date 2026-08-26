@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import 'account_data_service.dart';
 import 'app_widgets.dart';
 import 'commerce_screens.dart';
 import 'home_screen.dart';
@@ -191,7 +192,8 @@ class MoneyApp extends StatefulWidget {
   State<MoneyApp> createState() => _MoneyAppState();
 }
 
-class _MoneyAppState extends State<MoneyApp> {
+class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   AppTab _activeTab = AppTab.home;
   SavingsGoal _goal = initialGoal;
   ThemeChoice _themeChoice = ThemeChoice.green;
@@ -199,24 +201,238 @@ class _MoneyAppState extends State<MoneyApp> {
   String? _spendingFilter;
   final List<FixedExpense> _fixedExpenses = [];
   final List<WishItem> _wishItems = [];
+  final AccountDataService _accountDataService = AccountDataService();
+  AccountData _accountData = AccountData(
+    balance: remainingBalance,
+    transactions: List.unmodifiable(transactions),
+    isDemo: true,
+  );
+  bool _notificationAccessGranted = false;
   late final ProductSearchGateway _productSearchGateway;
   late final bool _ownsProductSearchGateway;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ownsProductSearchGateway = widget.productSearchGateway == null;
     _productSearchGateway =
         widget.productSearchGateway ?? ProductSearchService();
+    _loadAccountData();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (_ownsProductSearchGateway &&
         _productSearchGateway is ProductSearchService) {
       _productSearchGateway.close();
     }
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshNotificationAccess(syncWhenGranted: true);
+    }
+  }
+
+  Future<void> _loadAccountData() async {
+    final saved = await _accountDataService.loadSaved();
+    final access = await _accountDataService.isNotificationAccessGranted();
+    if (!mounted) return;
+    setState(() {
+      if (saved != null) _accountData = saved;
+      _notificationAccessGranted = access;
+    });
+    if (access) await _syncTossNotifications(silent: true);
+  }
+
+  Future<void> _refreshNotificationAccess({
+    bool syncWhenGranted = false,
+  }) async {
+    final granted = await _accountDataService.isNotificationAccessGranted();
+    if (!mounted) return;
+    setState(() => _notificationAccessGranted = granted);
+    if (granted && syncWhenGranted) {
+      await _syncTossNotifications(silent: true);
+    }
+  }
+
+  Future<AccountActionResult> _importAccountData() async {
+    try {
+      final result = await _accountDataService.importDocument(
+        _accountData,
+        requestPassword: _requestExcelPassword,
+      );
+      if (result == null) {
+        return const AccountActionResult(
+          succeeded: false,
+          message: '파일 가져오기를 취소했어요.',
+        );
+      }
+      if (mounted) setState(() => _accountData = result.data);
+      final skippedText = result.skipped == 0
+          ? ''
+          : ' · 읽지 못한 행 ${result.skipped}개';
+      return AccountActionResult(
+        succeeded: true,
+        message: '지출 ${result.imported}건을 반영했어요$skippedText',
+      );
+    } on AccountImportException catch (error) {
+      return AccountActionResult(succeeded: false, message: error.message);
+    } catch (error, stackTrace) {
+      debugPrint('Account import failed (${error.runtimeType}).\n$stackTrace');
+      return const AccountActionResult(
+        succeeded: false,
+        message: '거래내역을 가져오지 못했어요. 파일 형식을 확인해 주세요.',
+      );
+    }
+  }
+
+  Future<String?> _requestExcelPassword(String? errorMessage) async {
+    final navigatorContext = _navigatorKey.currentContext;
+    if (!mounted || navigatorContext == null) return null;
+    var enteredPassword = '';
+    var obscurePassword = true;
+    var validationMessage = errorMessage;
+    final palette = _palette;
+    final password = await showDialog<String>(
+      context: navigatorContext,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          void submit() {
+            final value = enteredPassword.trim();
+            if (value.isEmpty) {
+              setDialogState(() => validationMessage = '비밀번호를 입력해 주세요.');
+              return;
+            }
+            Navigator.of(dialogContext).pop(value);
+          }
+
+          return AlertDialog(
+            icon: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: palette.accentSoft,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(Icons.lock_outline_rounded, color: palette.text),
+            ),
+            title: const Text('엑셀 비밀번호'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '토스뱅크에서 받은 거래내역 파일의 '
+                  '비밀번호를 입력해 주세요.',
+                  style: TextStyle(
+                    color: palette.textSoft,
+                    fontSize: 14,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  autofocus: true,
+                  obscureText: obscurePassword,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.done,
+                  onChanged: (value) => enteredPassword = value,
+                  onSubmitted: (_) => submit(),
+                  decoration: InputDecoration(
+                    labelText: '비밀번호',
+                    hintText: '파일 비밀번호 입력',
+                    errorText: validationMessage,
+                    prefixIcon: const Icon(Icons.password_rounded),
+                    suffixIcon: IconButton(
+                      tooltip: obscurePassword ? '비밀번호 보기' : '비밀번호 숨기기',
+                      onPressed: () => setDialogState(
+                        () => obscurePassword = !obscurePassword,
+                      ),
+                      icon: Icon(
+                        obscurePassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.shield_outlined,
+                      size: 16,
+                      color: palette.textMuted,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '비밀번호는 파일을 여는 동안만 사용하고 '
+                        '휴대폰에 저장하지 않아요.',
+                        style: TextStyle(
+                          color: palette.textMuted,
+                          fontSize: 11,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('취소'),
+              ),
+              FilledButton(onPressed: submit, child: const Text('열기')),
+            ],
+          );
+        },
+      ),
+    );
+    return password;
+  }
+
+  Future<AccountActionResult> _syncTossNotifications({
+    bool silent = false,
+  }) async {
+    try {
+      final result = await _accountDataService.syncNotifications(_accountData);
+      if (mounted && !identical(result.data, _accountData)) {
+        setState(() => _accountData = result.data);
+      }
+      return AccountActionResult(
+        succeeded: true,
+        message: result.added == 0
+            ? '새로 반영할 토스 지출 알림이 없어요.'
+            : '새 지출 알림 ${result.added}건을 반영했어요.',
+      );
+    } catch (_) {
+      return AccountActionResult(
+        succeeded: false,
+        message: silent ? '' : '토스 알림을 불러오지 못했어요.',
+      );
+    }
+  }
+
+  Future<AccountActionResult> _openNotificationSettings() async {
+    try {
+      await _accountDataService.openNotificationAccessSettings();
+      return const AccountActionResult(
+        succeeded: true,
+        message: '설정에서 아이뱅크매니저의 알림 접근을 허용해 주세요.',
+      );
+    } on AccountImportException catch (error) {
+      return AccountActionResult(succeeded: false, message: error.message);
+    }
   }
 
   AppPalette get _palette => AppPalette.fromChoice(_themeChoice);
@@ -326,6 +542,9 @@ class _MoneyAppState extends State<MoneyApp> {
         goal: _goal,
         themeChoice: _themeChoice,
         unreadCount: _unreadCount,
+        accountBalance: _accountData.balance,
+        transactions: _accountData.transactions,
+        isDemoData: _accountData.isDemo,
         onThemeChanged: (choice) => setState(() => _themeChoice = choice),
         onOpenNotifications: _openNotifications,
         onPeriodChanged: _changePeriod,
@@ -336,15 +555,24 @@ class _MoneyAppState extends State<MoneyApp> {
       AppTab.notifications => NotificationsScreen(
         onBack: () => setState(() => _activeTab = AppTab.home),
       ),
-      AppTab.habits => const HabitsScreen(),
+      AppTab.habits => HabitsScreen(transactions: _accountData.transactions),
       AppTab.insights => InsightsScreen(
         goal: _goal,
+        transactions: _accountData.transactions,
         onOpenCategory: _openSpending,
         onSeeGoal: () => setState(() => _activeTab = AppTab.home),
       ),
       AppTab.spending => SpendingScreen(
         key: ValueKey(_spendingFilter ?? 'all'),
         initialCategory: _spendingFilter,
+        accountBalance: _accountData.balance,
+        transactions: _accountData.transactions,
+        isDemoData: _accountData.isDemo,
+        lastUpdated: _accountData.lastUpdated,
+        notificationAccessGranted: _notificationAccessGranted,
+        onImportAccountData: _importAccountData,
+        onSyncNotifications: _syncTossNotifications,
+        onOpenNotificationSettings: _openNotificationSettings,
         fixedExpenses: _fixedExpenses,
         onAddFixedExpense: _addFixedExpense,
         onUpdateFixedExpense: _updateFixedExpense,
@@ -374,6 +602,7 @@ class _MoneyAppState extends State<MoneyApp> {
   Widget build(BuildContext context) {
     final palette = _palette;
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       debugShowCheckedModeBanner: false,
       title: '아이뱅크매니저',
       scrollBehavior: const AppScrollBehavior(),

@@ -450,7 +450,6 @@ class _SavingPlanCardState extends State<SavingPlanCard> {
                       borderSide: BorderSide(color: palette.text, width: 2),
                     ),
                     enabledBorder: UnderlineInputBorder(
-
                       // width is weight of the border
                       borderSide: BorderSide(color: palette.text, width: 2),
                     ),
