@@ -151,6 +151,12 @@ const categoryMeta = <String, CategoryInfo>{
   '교통': CategoryInfo(color: Color(0xFF5B9CF5), emoji: '🚌'),
   '구독': CategoryInfo(color: Color(0xFFB57BE8), emoji: '📺'),
   '쇼핑': CategoryInfo(color: Color(0xFFF071A5), emoji: '🛍️'),
+  '생활': CategoryInfo(color: Color(0xFF78A89A), emoji: '🏠'),
+  '의료': CategoryInfo(color: Color(0xFFE97777), emoji: '🩺'),
+  '여가': CategoryInfo(color: Color(0xFF8D7BE8), emoji: '🎮'),
+  '이체': CategoryInfo(color: Color(0xFF7E95B5), emoji: '↔️'),
+  '현금': CategoryInfo(color: Color(0xFF9B8A70), emoji: '💵'),
+  '기타': CategoryInfo(color: Color(0xFF87958A), emoji: '🧾'),
 };
 
 const shopProducts = <ShopProduct>[

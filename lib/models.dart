@@ -244,6 +244,43 @@ class MoneyTransaction {
 }
 
 @immutable
+class AccountData {
+  const AccountData({
+    required this.balance,
+    required this.transactions,
+    required this.isDemo,
+    this.lastUpdated,
+  });
+
+  final int balance;
+  final List<MoneyTransaction> transactions;
+  final bool isDemo;
+  final DateTime? lastUpdated;
+
+  AccountData copyWith({
+    int? balance,
+    List<MoneyTransaction>? transactions,
+    bool? isDemo,
+    DateTime? lastUpdated,
+  }) {
+    return AccountData(
+      balance: balance ?? this.balance,
+      transactions: transactions ?? this.transactions,
+      isDemo: isDemo ?? this.isDemo,
+      lastUpdated: lastUpdated ?? this.lastUpdated,
+    );
+  }
+}
+
+@immutable
+class AccountActionResult {
+  const AccountActionResult({required this.succeeded, required this.message});
+
+  final bool succeeded;
+  final String message;
+}
+
+@immutable
 class CategoryInfo {
   const CategoryInfo({required this.color, required this.emoji});
 
@@ -337,6 +374,8 @@ class SpendingStatsData {
     required this.averagePerDay,
     required this.topCategory,
     required this.topCategoryAmount,
+    required this.topMerchant,
+    required this.topMerchantAmount,
   });
 
   final int thisMonthSpent;
@@ -346,6 +385,8 @@ class SpendingStatsData {
   final int averagePerDay;
   final String? topCategory;
   final int topCategoryAmount;
+  final String? topMerchant;
+  final int topMerchantAmount;
 
   int get difference => thisMonthSpent - lastMonthSpent;
 }

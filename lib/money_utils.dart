@@ -89,29 +89,40 @@ SpendingStatsData spendingStats(
   int thisYear,
   int thisMonth,
   int lastYear,
-  int lastMonth,
-) {
+  int lastMonth, {
+  DateTime? asOf,
+}) {
   final current = items
       .where((item) => isMonth(item.date, thisYear, thisMonth))
       .toList();
   final currentSpent = current.fold(0, (sum, item) => sum + item.amount);
   final previousSpent = monthSpent(items, lastYear, lastMonth);
   final count = current.length;
-  final maxDay = current.fold(0, (day, item) => math.max(day, item.date.day));
+  final referenceDate = asOf ?? DateTime.now();
+  final elapsedDays =
+      referenceDate.year == thisYear && referenceDate.month == thisMonth
+      ? referenceDate.day
+      : DateTime(thisYear, thisMonth + 1, 0).day;
   final byCategory = <String, int>{};
+  final byMerchant = <String, int>{};
   for (final item in current) {
     byCategory[item.category] = (byCategory[item.category] ?? 0) + item.amount;
+    byMerchant[item.merchant] = (byMerchant[item.merchant] ?? 0) + item.amount;
   }
   final sorted = byCategory.entries.toList()
+    ..sort((left, right) => right.value.compareTo(left.value));
+  final merchants = byMerchant.entries.toList()
     ..sort((left, right) => right.value.compareTo(left.value));
   return SpendingStatsData(
     thisMonthSpent: currentSpent,
     lastMonthSpent: previousSpent,
     count: count,
     averagePerTransaction: count == 0 ? 0 : (currentSpent / count).round(),
-    averagePerDay: maxDay == 0 ? 0 : (currentSpent / maxDay).round(),
+    averagePerDay: elapsedDays == 0 ? 0 : (currentSpent / elapsedDays).round(),
     topCategory: sorted.isEmpty ? null : sorted.first.key,
     topCategoryAmount: sorted.isEmpty ? 0 : sorted.first.value,
+    topMerchant: merchants.isEmpty ? null : merchants.first.key,
+    topMerchantAmount: merchants.isEmpty ? 0 : merchants.first.value,
   );
 }
 
@@ -128,13 +139,44 @@ int _sumCategory(
       .fold(0, (sum, item) => sum + item.amount);
 }
 
-List<Insight> insightsFor(List<MoneyTransaction> items, SavingsGoal goal) {
+List<Insight> insightsFor(
+  List<MoneyTransaction> items,
+  SavingsGoal goal, {
+  DateTime? asOf,
+}) {
+  final referenceDate = asOf ?? DateTime.now();
+  final previousMonth = DateTime(referenceDate.year, referenceDate.month - 1);
   final insights = <Insight>[];
-  final deliveryThis = _sumCategory(items, 2026, 8, '배달');
-  final deliveryLast = _sumCategory(items, 2026, 7, '배달');
-  final cafeThis = _sumCategory(items, 2026, 8, '카페');
-  final cafeLast = _sumCategory(items, 2026, 7, '카페');
-  final subscriptionThis = _sumCategory(items, 2026, 8, '구독');
+  final deliveryThis = _sumCategory(
+    items,
+    referenceDate.year,
+    referenceDate.month,
+    '배달',
+  );
+  final deliveryLast = _sumCategory(
+    items,
+    previousMonth.year,
+    previousMonth.month,
+    '배달',
+  );
+  final cafeThis = _sumCategory(
+    items,
+    referenceDate.year,
+    referenceDate.month,
+    '카페',
+  );
+  final cafeLast = _sumCategory(
+    items,
+    previousMonth.year,
+    previousMonth.month,
+    '카페',
+  );
+  final subscriptionThis = _sumCategory(
+    items,
+    referenceDate.year,
+    referenceDate.month,
+    '구독',
+  );
   final dailyRate = dailySavingRate(goal);
 
   if (deliveryThis > deliveryLast) {

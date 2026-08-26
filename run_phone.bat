@@ -5,6 +5,10 @@ cd /d "%~dp0"
 set "ADB=%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe"
 if not exist "%ADB%" set "ADB=adb"
 
+rem A phone can remain visible as "offline" after reconnecting the USB cable.
+"%ADB%" reconnect offline >nul 2>&1
+timeout /t 1 /nobreak >nul
+
 set "DEVICE_ID=%~1"
 if not defined DEVICE_ID (
   for /f "skip=1 tokens=1,2" %%A in ('"%ADB%" devices') do (
