@@ -361,7 +361,7 @@ class _SpendingScreenState extends State<SpendingScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.white,
+      backgroundColor: palette.surface,
       builder: (context) => ThemeScope(
         palette: palette,
         child: _RecentTransactionsSheet(
@@ -513,7 +513,7 @@ class _SpendingScreenState extends State<SpendingScreen> {
                     height: 40,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: palette.surface,
                       borderRadius: BorderRadius.circular(13),
                     ),
                     child: Icon(
@@ -571,7 +571,7 @@ class _CategoryPieCard extends StatelessWidget {
       key: const Key('category-pie-card'),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: palette.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFE9EEE9)),
       ),
@@ -812,7 +812,7 @@ class _SpendingBarCardState extends State<_SpendingBarCard> {
       key: const Key('spending-bar-card'),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: palette.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFE9EEE9)),
       ),
@@ -939,7 +939,7 @@ class _SpendingBarCardState extends State<_SpendingBarCard> {
       onPressed: () => setState(() => _period = period),
       style: TextButton.styleFrom(
         foregroundColor: selected ? palette.text : palette.textMuted,
-        backgroundColor: selected ? Colors.white : Colors.transparent,
+        backgroundColor: selected ? palette.surface : Colors.transparent,
         minimumSize: const Size(46, 30),
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1178,7 +1178,7 @@ class _AccountDataSection extends StatelessWidget {
                 height: 36,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: palette.surface,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -1237,7 +1237,7 @@ class _AccountDataSection extends StatelessWidget {
                   icon: const Icon(Icons.file_open_outlined, size: 18),
                   label: const Text('내역 가져오기'),
                   style: FilledButton.styleFrom(
-                    backgroundColor: Colors.white,
+                    backgroundColor: palette.surface,
                     foregroundColor: palette.text,
                     minimumSize: const Size(44, 44),
                     padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -1413,7 +1413,7 @@ class _FixedExpensesSection extends StatelessWidget {
                     height: 40,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: palette.surface,
                       borderRadius: BorderRadius.circular(13),
                     ),
                     child: Text(

@@ -509,9 +509,9 @@ class AppBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: dividerColor)),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        border: const Border(top: BorderSide(color: dividerColor)),
       ),
       child: SafeArea(
         top: false,

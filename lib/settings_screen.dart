@@ -14,14 +14,18 @@ class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
     required this.currentUser,
     required this.themeChoice,
+    required this.isDarkMode,
     required this.onThemeChanged,
+    required this.onDarkModeChanged,
     required this.onOpenAccount,
     super.key,
   });
 
   final AppUser? currentUser;
   final ThemeChoice themeChoice;
+  final bool isDarkMode;
   final ValueChanged<ThemeChoice> onThemeChanged;
+  final ValueChanged<bool> onDarkModeChanged;
   final VoidCallback onOpenAccount;
 
   static const _themeLabels = <ThemeChoice, String>{
@@ -69,7 +73,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           SoftCard(
-            color: Colors.white,
+            color: palette.surface,
             radius: 16,
             onTap: onOpenAccount,
             child: Row(
@@ -136,7 +140,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           SoftCard(
-            color: Colors.white,
+            color: palette.surface,
             radius: 16,
             child: Column(
               children: ThemeChoice.values.map((choice) {
@@ -160,7 +164,7 @@ class SettingsScreen extends StatelessWidget {
                               color: _themeColors[choice],
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: Colors.white,
+                                color: palette.surface,
                                 width: 2,
                               ),
                               boxShadow: [
@@ -213,25 +217,30 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           SoftCard(
-            color: Colors.white,
+            color: palette.surface,
             radius: 16,
             child: Row(
               children: [
                 Icon(
                   Icons.dark_mode_outlined,
-                  color: palette.textMuted,
+                  color: palette.text,
                   size: 20,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     '다크 모드',
-                    style: TextStyle(color: palette.textMuted, fontSize: 14),
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                Text(
-                  '준비 중',
-                  style: TextStyle(color: palette.textMuted, fontSize: 12),
+                Switch(
+                  value: isDarkMode,
+                  activeTrackColor: palette.accent,
+                  onChanged: onDarkModeChanged,
                 ),
               ],
             ),

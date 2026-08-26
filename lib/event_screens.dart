@@ -246,7 +246,7 @@ class _PointPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: palette.surface,
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: palette.accentBorder),
       ),
@@ -282,7 +282,7 @@ class _PointBannerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SoftCard(
-      color: Colors.white,
+      color: palette.surface,
       radius: 20,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -367,7 +367,7 @@ class _AttendanceSection extends StatelessWidget {
                     aspectRatio: 1,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: filled ? palette.accent : Colors.white,
+                        color: filled ? palette.accent : palette.surface,
                         borderRadius: BorderRadius.circular(12),
                         border: isToday
                             ? Border.all(color: palette.textSoft, width: 1.6)
@@ -412,7 +412,7 @@ class _SurveyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
     return SoftCard(
-      color: Colors.white,
+      color: palette.surface,
       radius: 16,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
@@ -515,7 +515,7 @@ class _ReferralCard extends StatelessWidget {
                     vertical: 10,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: palette.surface,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -533,7 +533,7 @@ class _ReferralCard extends StatelessWidget {
               FilledButton(
                 style: FilledButton.styleFrom(
                   backgroundColor: palette.text,
-                  foregroundColor: Colors.white,
+                  foregroundColor: palette.pageBackground,
                 ),
                 onPressed: () => onCopy(referral.code),
                 child: const Text('복사'),
@@ -567,7 +567,7 @@ class _RewardCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
     return SoftCard(
-      color: Colors.white,
+      color: palette.surface,
       radius: 16,
       padding: const EdgeInsets.all(14),
       onTap: affordable ? onRedeem : null,

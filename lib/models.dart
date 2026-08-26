@@ -35,12 +35,50 @@ class AppPalette {
     required this.accentBorder,
     required this.accentTrack,
     required this.pageBackground,
+    required this.surface,
     required this.text,
     required this.textMuted,
     required this.textSoft,
   });
 
-  factory AppPalette.fromChoice(ThemeChoice choice) {
+  factory AppPalette.fromChoice(ThemeChoice choice, {bool isDark = false}) {
+    if (isDark) {
+      return switch (choice) {
+        ThemeChoice.yellow => const AppPalette(
+          accent: Color(0xFFE0C43A),
+          accentSoft: Color(0xFF3A3620),
+          accentBorder: Color(0xFF4A4526),
+          accentTrack: Color(0xFF3A3620),
+          pageBackground: Color(0xFF17160F),
+          surface: Color(0xFF221F14),
+          text: Color(0xFFF0EEE3),
+          textMuted: Color(0xFF9A9683),
+          textSoft: Color(0xFFC7C2A9),
+        ),
+        ThemeChoice.navy => const AppPalette(
+          accent: Color(0xFF6E86AD),
+          accentSoft: Color(0xFF232C3A),
+          accentBorder: Color(0xFF334054),
+          accentTrack: Color(0xFF2A3547),
+          pageBackground: Color(0xFF12161D),
+          surface: Color(0xFF1A202B),
+          text: Color(0xFFE7ECF5),
+          textMuted: Color(0xFF8996A9),
+          textSoft: Color(0xFFB2BECF),
+        ),
+        ThemeChoice.green => const AppPalette(
+          accent: Color(0xFF7CA084),
+          accentSoft: Color(0xFF213026),
+          accentBorder: Color(0xFF2E4034),
+          accentTrack: Color(0xFF263A2C),
+          pageBackground: Color(0xFF11170F),
+          surface: Color(0xFF1A2318),
+          text: Color(0xFFE7F0E8),
+          textMuted: Color(0xFF8CA391),
+          textSoft: Color(0xFFB6CBB9),
+        ),
+      };
+    }
     return switch (choice) {
       ThemeChoice.yellow => const AppPalette(
         accent: Color(0xFFFFEF5B),
@@ -48,6 +86,7 @@ class AppPalette {
         accentBorder: Color(0xFFF3E27A),
         accentTrack: Color(0xFFEFE7B3),
         pageBackground: Color(0xFFFFF9C3),
+        surface: Colors.white,
         text: Color(0xFF1F3528),
         textMuted: Color(0xFF7A8F7E),
         textSoft: Color(0xFF4D6354),
@@ -58,6 +97,7 @@ class AppPalette {
         accentBorder: Color(0xFFB7C5D8),
         accentTrack: Color(0xFFC5D1E0),
         pageBackground: Color(0xFFE6EDF6),
+        surface: Colors.white,
         text: Color(0xFF243552),
         textMuted: Color(0xFF8A96A8),
         textSoft: Color(0xFF51627A),
@@ -68,6 +108,7 @@ class AppPalette {
         accentBorder: Color(0xFFB4D4B8),
         accentTrack: Color(0xFFC4DCC8),
         pageBackground: Color(0xFFE5F3E8),
+        surface: Colors.white,
         text: Color(0xFF1F3528),
         textMuted: Color(0xFF7A8F7E),
         textSoft: Color(0xFF4D6354),
@@ -80,6 +121,10 @@ class AppPalette {
   final Color accentBorder;
   final Color accentTrack;
   final Color pageBackground;
+  /// 카드/시트 등 콘텐츠 배경색. 라이트 모드에서는 흰색, 다크 모드에서는
+  /// 어두운 회색 계열입니다. 기존에 여러 화면에서 하드코딩돼 있던
+  /// `Colors.white` 카드 배경을 이 필드로 교체해 다크 모드에 대응합니다.
+  final Color surface;
   final Color text;
   final Color textMuted;
   final Color textSoft;

@@ -43,17 +43,17 @@ class AppScrollBehavior extends MaterialScrollBehavior {
   }
 }
 
-ThemeData _buildAppTheme(AppPalette palette) {
+ThemeData _buildAppTheme(AppPalette palette, {required bool isDark}) {
   final colorScheme =
       ColorScheme.fromSeed(
         seedColor: palette.accent,
-        brightness: Brightness.light,
+        brightness: isDark ? Brightness.dark : Brightness.light,
       ).copyWith(
         primary: palette.accent,
         onPrimary: palette.text,
         secondary: palette.accentSoft,
         onSecondary: palette.text,
-        surface: Colors.white,
+        surface: palette.surface,
         onSurface: palette.text,
         outline: palette.accentBorder,
         outlineVariant: dividerColor,
@@ -72,14 +72,15 @@ ThemeData _buildAppTheme(AppPalette palette) {
     useMaterial3: true,
     colorScheme: colorScheme,
     scaffoldBackgroundColor: palette.pageBackground,
-    textTheme: ThemeData.light().textTheme.apply(
-      bodyColor: palette.text,
-      displayColor: palette.text,
-      fontFamily: 'sans-serif',
-    ),
+    textTheme:
+        (isDark ? ThemeData.dark() : ThemeData.light()).textTheme.apply(
+          bodyColor: palette.text,
+          displayColor: palette.text,
+          fontFamily: 'sans-serif',
+        ),
     inputDecorationTheme: InputDecorationThemeData(
       filled: true,
-      fillColor: const Color(0xFFF6F8F6),
+      fillColor: isDark ? palette.accentSoft : const Color(0xFFF6F8F6),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
       labelStyle: TextStyle(
         color: palette.textSoft,
@@ -113,7 +114,7 @@ ThemeData _buildAppTheme(AppPalette palette) {
       ),
     ),
     dialogTheme: DialogThemeData(
-      backgroundColor: Colors.white,
+      backgroundColor: palette.surface,
       surfaceTintColor: Colors.transparent,
       elevation: 18,
       shadowColor: const Color(0x330F2217),
@@ -137,8 +138,8 @@ ThemeData _buildAppTheme(AppPalette palette) {
       actionsPadding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
     ),
     bottomSheetTheme: BottomSheetThemeData(
-      backgroundColor: Colors.white,
-      modalBackgroundColor: Colors.white,
+      backgroundColor: palette.surface,
+      modalBackgroundColor: palette.surface,
       surfaceTintColor: Colors.transparent,
       modalBarrierColor: const Color(0x99101D14),
       modalElevation: 18,
@@ -152,7 +153,7 @@ ThemeData _buildAppTheme(AppPalette palette) {
       ),
     ),
     popupMenuTheme: PopupMenuThemeData(
-      color: Colors.white,
+      color: palette.surface,
       surfaceTintColor: Colors.transparent,
       elevation: 12,
       shadowColor: const Color(0x2E0F2217),
@@ -204,6 +205,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   AppTab _activeTab = AppTab.home;
   SavingsGoal _goal = initialGoal;
   ThemeChoice _themeChoice = ThemeChoice.green;
+  bool _isDarkMode = false;
   int _unreadCount = demoNotifications.length;
   String? _spendingFilter;
   final List<FixedExpense> _fixedExpenses = [];
@@ -457,7 +459,8 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     }
   }
 
-  AppPalette get _palette => AppPalette.fromChoice(_themeChoice);
+  AppPalette get _palette =>
+      AppPalette.fromChoice(_themeChoice, isDark: _isDarkMode);
 
   void _changeTab(AppTab tab) {
     setState(() {
@@ -474,9 +477,12 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   }
 
   Future<void> _openAccount() async {
+    final navigatorContext = _navigatorKey.currentContext;
+    if (!mounted || navigatorContext == null) return;
+
     final user = _currentUser;
     if (user == null) {
-      await Navigator.of(context).push(
+      await Navigator.of(navigatorContext).push(
         MaterialPageRoute(
           builder: (_) => LoginScreen(authGateway: _authGateway),
         ),
@@ -485,7 +491,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     }
 
     final signOut = await showDialog<bool>(
-      context: context,
+      context: navigatorContext,
       builder: (context) => AlertDialog(
         title: const Text('계정'),
         content: Text(user.email ?? user.uid),
@@ -610,7 +616,9 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
       AppTab.settings => SettingsScreen(
         currentUser: _currentUser,
         themeChoice: _themeChoice,
+        isDarkMode: _isDarkMode,
         onThemeChanged: (choice) => setState(() => _themeChoice = choice),
+        onDarkModeChanged: (value) => setState(() => _isDarkMode = value),
         onOpenAccount: _openAccount,
       ),
       AppTab.notifications => NotificationsScreen(
@@ -662,15 +670,15 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final palette = _palette;
-    return MaterialApp(
-      navigatorKey: _navigatorKey,
-      debugShowCheckedModeBanner: false,
-      title: '아이뱅크매니저',
-      scrollBehavior: const AppScrollBehavior(),
-      theme: _buildAppTheme(palette),
-      home: ThemeScope(
-        palette: palette,
-        child: PopScope(
+    return ThemeScope(
+      palette: palette,
+      child: MaterialApp(
+        navigatorKey: _navigatorKey,
+        debugShowCheckedModeBanner: false,
+        title: '아이뱅크매니저',
+        scrollBehavior: const AppScrollBehavior(),
+        theme: _buildAppTheme(palette, isDark: _isDarkMode),
+        home: PopScope(
           canPop: _activeTab == AppTab.home,
           onPopInvokedWithResult: (didPop, _) {
             if (!didPop && _activeTab != AppTab.home) {
@@ -685,7 +693,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
                 child: Container(
                   width: double.infinity,
                   constraints: const BoxConstraints(maxWidth: 430),
-                  color: Colors.white,
+                  color: palette.surface,
                   child: Column(
                     children: [
                       Expanded(

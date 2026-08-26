@@ -384,7 +384,7 @@ class _GoalStat extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: palette.surface,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Column(
