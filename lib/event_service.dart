@@ -88,17 +88,19 @@ class EventService implements EventGateway {
   @override
   Future<PointBalance> fetchPoints() async {
     final headers = await _tryAuthHeaders();
-    if (headers == null) return _enterDemoMode(_demoPoints);
+    if (headers == null) return _enterDemoMode<PointBalance>(_demoPoints);
     try {
       final response = await _client
           .get(_uri('/api/events/points'), headers: headers)
           .timeout(const Duration(seconds: 6));
       final body = _decode(response);
-      if (response.statusCode != 200) return _enterDemoMode(_demoPoints);
+      if (response.statusCode != 200) {
+        return _enterDemoMode<PointBalance>(_demoPoints);
+      }
       _demoMode = false;
       return PointBalance.fromJson(body);
     } catch (_) {
-      return _enterDemoMode(_demoPoints);
+      return _enterDemoMode<PointBalance>(_demoPoints);
     }
   }
 
@@ -134,20 +136,20 @@ class EventService implements EventGateway {
       currentStreakDays: _demoPoints.currentStreakDays + 1,
       lastCheckInDate: now,
     );
-    return _enterDemoMode(_demoPoints);
+    return _enterDemoMode<PointBalance>(_demoPoints);
   }
 
   @override
   Future<List<SurveyEvent>> fetchSurveys() async {
     final headers = await _tryAuthHeaders();
-    if (headers == null) return _enterDemoModeList(_demoSurveys);
+    if (headers == null) return _enterDemoModeList<SurveyEvent>(_demoSurveys);
     try {
       final response = await _client
           .get(_uri('/api/events/surveys'), headers: headers)
           .timeout(const Duration(seconds: 6));
       final body = _decode(response);
       if (response.statusCode != 200 || body['items'] is! List) {
-        return _enterDemoModeList(_demoSurveys);
+        return _enterDemoModeList<SurveyEvent>(_demoSurveys);
       }
       _demoMode = false;
       return (body['items'] as List)
@@ -155,7 +157,7 @@ class EventService implements EventGateway {
           .map(SurveyEvent.fromJson)
           .toList();
     } catch (_) {
-      return _enterDemoModeList(_demoSurveys);
+      return _enterDemoModeList<SurveyEvent>(_demoSurveys);
     }
   }
 
@@ -211,31 +213,33 @@ class EventService implements EventGateway {
   @override
   Future<ReferralInfo> fetchReferralInfo() async {
     final headers = await _tryAuthHeaders();
-    if (headers == null) return _enterDemoMode(demoReferralInfo);
+    if (headers == null) return _enterDemoMode<ReferralInfo>(demoReferralInfo);
     try {
       final response = await _client
           .get(_uri('/api/events/referral'), headers: headers)
           .timeout(const Duration(seconds: 6));
       final body = _decode(response);
-      if (response.statusCode != 200) return _enterDemoMode(demoReferralInfo);
+      if (response.statusCode != 200) {
+        return _enterDemoMode<ReferralInfo>(demoReferralInfo);
+      }
       _demoMode = false;
       return ReferralInfo.fromJson(body);
     } catch (_) {
-      return _enterDemoMode(demoReferralInfo);
+      return _enterDemoMode<ReferralInfo>(demoReferralInfo);
     }
   }
 
   @override
   Future<List<RewardCoupon>> fetchRewards() async {
     final headers = await _tryAuthHeaders();
-    if (headers == null) return _enterDemoModeList(_demoRewards);
+    if (headers == null) return _enterDemoModeList<RewardCoupon>(_demoRewards);
     try {
       final response = await _client
           .get(_uri('/api/events/rewards'), headers: headers)
           .timeout(const Duration(seconds: 6));
       final body = _decode(response);
       if (response.statusCode != 200 || body['items'] is! List) {
-        return _enterDemoModeList(_demoRewards);
+        return _enterDemoModeList<RewardCoupon>(_demoRewards);
       }
       _demoMode = false;
       return (body['items'] as List)
@@ -243,7 +247,7 @@ class EventService implements EventGateway {
           .map(RewardCoupon.fromJson)
           .toList();
     } catch (_) {
-      return _enterDemoModeList(_demoRewards);
+      return _enterDemoModeList<RewardCoupon>(_demoRewards);
     }
   }
 
