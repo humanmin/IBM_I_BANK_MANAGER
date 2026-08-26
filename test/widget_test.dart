@@ -182,8 +182,30 @@ void main() {
 
     await tester.tap(find.byKey(const Key('nav-spending')));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(
+    await tester.scrollUntilVisible(
       find.byKey(const Key('add-fixed-expense-button')),
+      350,
+      scrollable: find.descendant(
+        of: find.byKey(const PageStorageKey('spending-scroll')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(
+      tester.widget(find.byKey(const Key('add-fixed-expense-button'))),
+      isA<TextButton>(),
+    );
+    final addButtonSize = tester.getSize(
+      find.byKey(const Key('add-fixed-expense-button')),
+    );
+    expect(addButtonSize.width, greaterThan(300));
+    expect(addButtonSize.height, greaterThanOrEqualTo(66));
+    expect(find.text('+ 등록'), findsOneWidget);
+    final addButton = tester.widget<TextButton>(
+      find.byKey(const Key('add-fixed-expense-button')),
+    );
+    expect(
+      addButton.style?.foregroundColor?.resolve(<WidgetState>{}),
+      const Color(0xFF000000),
     );
     await tester.tap(find.byKey(const Key('add-fixed-expense-button')));
     await tester.pumpAndSettle();
@@ -201,5 +223,54 @@ void main() {
     expect(find.text('월 고정지출'), findsOneWidget);
     expect(find.text('17,000원'), findsWidgets);
     expect(find.text('OTT·구독 · 매월 15일'), findsOneWidget);
+  });
+
+  testWidgets('spending summary keeps only the compact data card', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(402, 874));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const MoneyApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('nav-spending')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('현재 잔액'), findsNothing);
+    expect(find.byKey(const Key('account-balance-value')), findsNothing);
+    expect(find.text('이번 달 총 지출'), findsNothing);
+    expect(find.text('가장 많이 쓴 곳'), findsNothing);
+    expect(find.text('가장 많이 쓴 카테고리'), findsOneWidget);
+    expect(find.byKey(const Key('top-category-card')), findsOneWidget);
+    expect(find.byKey(const Key('category-pie-card')), findsOneWidget);
+    expect(find.byKey(const Key('category-pie-chart')), findsOneWidget);
+    expect(find.byKey(const Key('spending-bar-card')), findsOneWidget);
+    expect(find.text('최근 7일 사용량'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('spending-bar-weekly')));
+    await tester.pumpAndSettle();
+    expect(find.text('이번 달 주간별 사용량'), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const Key('account-data-card'))).height,
+      lessThanOrEqualTo(130),
+    );
+
+    expect(find.byKey(const Key('recent-transactions-sheet')), findsNothing);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('recent-transactions-button')),
+      350,
+      scrollable: find.descendant(
+        of: find.byKey(const PageStorageKey('spending-scroll')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.drag(
+      find.byKey(const PageStorageKey('spending-scroll')),
+      const Offset(0, -180),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('recent-transactions-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('recent-transactions-sheet')), findsOneWidget);
+    expect(find.byKey(const Key('recent-filter-all')), findsOneWidget);
   });
 }

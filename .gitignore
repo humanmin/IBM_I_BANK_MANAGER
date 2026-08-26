@@ -50,6 +50,10 @@ app.*.map.json
 
 # Local backend secrets
 /server/.env
+/server/node_modules/
+
+# Separate nested repository used for hackathon experiments
+/IBM_HACKATHON/
 
 # OpenShift secret 실제 값 채운 사본에 대한 실수 방지
 openshift/secret.yaml

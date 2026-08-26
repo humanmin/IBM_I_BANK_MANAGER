@@ -573,7 +573,6 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
       AppTab.spending => SpendingScreen(
         key: ValueKey(_spendingFilter ?? 'all'),
         initialCategory: _spendingFilter,
-        accountBalance: _accountData.balance,
         transactions: _accountData.transactions,
         isDemoData: _accountData.isDemo,
         lastUpdated: _accountData.lastUpdated,

@@ -255,7 +255,6 @@ class _BoundedPointerScrollPosition extends ScrollPositionWithSingleContext {
 
 class SpendingScreen extends StatefulWidget {
   const SpendingScreen({
-    required this.accountBalance,
     required this.transactions,
     required this.isDemoData,
     required this.lastUpdated,
@@ -272,7 +271,6 @@ class SpendingScreen extends StatefulWidget {
   });
 
   final String? initialCategory;
-  final int accountBalance;
   final List<MoneyTransaction> transactions;
   final bool isDemoData;
   final DateTime? lastUpdated;
@@ -355,6 +353,25 @@ class _SpendingScreenState extends State<SpendingScreen> {
       );
   }
 
+  Future<void> _openRecentTransactions(
+    List<MoneyTransaction> transactions,
+  ) async {
+    final palette = ThemeScope.paletteOf(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      builder: (context) => ThemeScope(
+        palette: palette,
+        child: _RecentTransactionsSheet(
+          transactions: transactions,
+          initialCategories: _selectedCategories,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
@@ -369,17 +386,12 @@ class _SpendingScreenState extends State<SpendingScreen> {
       asOf: now,
     );
     final recent = recentTransactions(widget.transactions, now.year, now.month);
-    final visible = _selectedCategories.isEmpty
-        ? recent
-        : recent
-              .where((item) => _selectedCategories.contains(item.category))
-              .toList();
-    final difference = stats.difference;
-    final comparison = difference > 0
-        ? '지난달보다 ${formatWon(difference)} 더 썼어요'
-        : difference < 0
-        ? '지난달보다 ${formatWon(difference.abs())} 덜 썼어요'
-        : '지난달과 비슷하게 썼어요';
+    final categories = categoryTotals(
+      widget.transactions,
+      now.year,
+      now.month,
+      categoryMeta,
+    );
     return ListView(
       key: const PageStorageKey('spending-scroll'),
       controller: _scrollController,
@@ -388,7 +400,6 @@ class _SpendingScreenState extends State<SpendingScreen> {
         const SectionHeading('이번 달 소비 통계', subtitle: '숫자가 많을수록, 고칠 점도 보여요'),
         const SizedBox(height: 18),
         _AccountDataSection(
-          balance: widget.accountBalance,
           isDemoData: widget.isDemoData,
           lastUpdated: widget.lastUpdated,
           notificationAccessGranted: widget.notificationAccessGranted,
@@ -398,46 +409,6 @@ class _SpendingScreenState extends State<SpendingScreen> {
             widget.notificationAccessGranted
                 ? widget.onSyncNotifications
                 : widget.onOpenNotificationSettings,
-          ),
-        ),
-        const SizedBox(height: 14),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: palette.accentSoft,
-            borderRadius: BorderRadius.circular(28),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '이번 달 총 지출',
-                style: TextStyle(
-                  color: palette.textSoft,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                formatWon(stats.thisMonthSpent),
-                style: TextStyle(
-                  color: palette.text,
-                  fontSize: 32,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -1.4,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                comparison,
-                style: TextStyle(
-                  color: palette.text,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
           ),
         ),
         const SizedBox(height: 14),
@@ -453,9 +424,10 @@ class _SpendingScreenState extends State<SpendingScreen> {
             _StatsTile(label: '하루 평균', value: formatWon(stats.averagePerDay)),
           ],
         ),
-        if (stats.topMerchant case final topMerchant?) ...[
+        if (stats.topCategory case final topCategory?) ...[
           const SizedBox(height: 14),
           Container(
+            key: const Key('top-category-card'),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: palette.accentSoft,
@@ -465,7 +437,7 @@ class _SpendingScreenState extends State<SpendingScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '가장 많이 쓴 곳',
+                  '가장 많이 쓴 카테고리',
                   style: TextStyle(
                     color: palette.textSoft,
                     fontSize: 12,
@@ -476,20 +448,31 @@ class _SpendingScreenState extends State<SpendingScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        topMerchant,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: palette.text,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      child: Row(
+                        children: [
+                          Text(
+                            categoryMeta[topCategory]?.emoji ?? '•',
+                            style: const TextStyle(fontSize: 18),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              topCategory,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: palette.text,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      formatWon(stats.topMerchantAmount),
+                      formatWon(stats.topCategoryAmount),
                       style: TextStyle(
                         color: palette.text,
                         fontSize: 15,
@@ -502,6 +485,10 @@ class _SpendingScreenState extends State<SpendingScreen> {
             ),
           ),
         ],
+        const SizedBox(height: 14),
+        _CategoryPieCard(categories: categories),
+        const SizedBox(height: 14),
+        _SpendingBarCard(transactions: widget.transactions, referenceDate: now),
         const SizedBox(height: 28),
         _FixedExpensesSection(
           expenses: widget.fixedExpenses,
@@ -509,112 +496,648 @@ class _SpendingScreenState extends State<SpendingScreen> {
           onEdit: _openFixedExpenseEditor,
           onDelete: _confirmFixedExpenseDelete,
         ),
-        const SizedBox(height: 28),
-        Text(
-          '최근 내역',
-          style: TextStyle(
-            color: palette.text,
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.5,
+        const SizedBox(height: 18),
+        Material(
+          color: mutedBackground,
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            key: const Key('recent-transactions-button'),
+            onTap: () => _openRecentTransactions(recent),
+            borderRadius: BorderRadius.circular(18),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: Icon(
+                      Icons.receipt_long_outlined,
+                      color: palette.text,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '최근 내역',
+                          style: TextStyle(
+                            color: palette.text,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        Text(
+                          recent.isEmpty
+                              ? '이번 달 거래내역이 없어요'
+                              : '이번 달 ${recent.length}건의 소비 내역',
+                          style: TextStyle(
+                            color: palette.textMuted,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: palette.textMuted),
+                ],
+              ),
+            ),
           ),
         ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: categoryMeta.entries.map((entry) {
-            final selected = _selectedCategories.contains(entry.key);
-            return FilterChip(
-              label: Text('${entry.value.emoji} ${entry.key}'),
-              selected: selected,
-              onSelected: (_) {
-                setState(() {
-                  if (selected) {
-                    _selectedCategories.remove(entry.key);
-                  } else {
-                    _selectedCategories.add(entry.key);
-                  }
-                });
-              },
-              showCheckmark: false,
-              selectedColor: palette.accent,
-              backgroundColor: mutedBackground,
-              side: BorderSide.none,
-              shape: const StadiumBorder(),
-              labelStyle: TextStyle(
-                color: selected ? palette.text : palette.textSoft,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 14),
-        if (visible.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: mutedBackground,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              '선택한 카테고리의 내역이 없어요',
-              style: TextStyle(
-                color: palette.textMuted,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          )
-        else
-          ..._transactionWidgets(visible, palette),
       ],
     );
   }
+}
 
-  List<Widget> _transactionWidgets(
-    List<MoneyTransaction> items,
-    AppPalette palette,
-  ) {
-    final widgets = <Widget>[];
-    DateTime? currentDay;
-    for (final item in items) {
-      if (currentDay == null ||
-          currentDay.year != item.date.year ||
-          currentDay.month != item.date.month ||
-          currentDay.day != item.date.day) {
-        currentDay = item.date;
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.only(top: 10, bottom: 2),
-            child: Row(
-              children: [
-                Text(
-                  '${item.date.month}월 ${item.date.day}일',
+class _CategoryPieCard extends StatelessWidget {
+  const _CategoryPieCard({required this.categories});
+
+  final List<CategoryTotal> categories;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = ThemeScope.paletteOf(context);
+    final total = categories.fold<int>(0, (sum, item) => sum + item.amount);
+    return Container(
+      key: const Key('category-pie-card'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE9EEE9)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '소비 카테고리 비율',
+            style: TextStyle(
+              color: palette.text,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '이번 달 어디에 가장 많이 썼는지 보여요',
+            style: TextStyle(color: palette.textMuted, fontSize: 11),
+          ),
+          const SizedBox(height: 16),
+          if (categories.isEmpty)
+            SizedBox(
+              height: 120,
+              child: Center(
+                child: Text(
+                  '표시할 소비 내역이 없어요',
                   style: TextStyle(
                     color: palette.textMuted,
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(width: 8),
-                const Expanded(child: Divider(color: dividerColor)),
+              ),
+            )
+          else
+            Row(
+              children: [
+                SizedBox(
+                  width: 124,
+                  height: 124,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CustomPaint(
+                        key: const Key('category-pie-chart'),
+                        size: const Size.square(124),
+                        painter: _CategoryPiePainter(categories),
+                      ),
+                      SizedBox(
+                        width: 72,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '전체',
+                              style: TextStyle(
+                                color: palette.textMuted,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                formatWon(total),
+                                style: TextStyle(
+                                  color: palette.text,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    children: categories.take(5).map((category) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 9,
+                              height: 9,
+                              decoration: BoxDecoration(
+                                color: category.info.color,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 7),
+                            Expanded(
+                              child: Text(
+                                category.category,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: palette.textSoft,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '${category.percent}%',
+                              style: TextStyle(
+                                color: palette.text,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryPiePainter extends CustomPainter {
+  const _CategoryPiePainter(this.categories);
+
+  final List<CategoryTotal> categories;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2 - 12;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    const strokeWidth = 18.0;
+    final backgroundPaint = Paint()
+      ..color = mutedBackground
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+    canvas.drawCircle(center, radius, backgroundPaint);
+
+    final total = categories.fold<int>(0, (sum, item) => sum + item.amount);
+    if (total <= 0) return;
+    var start = -math.pi / 2;
+    for (final category in categories) {
+      final sweep = math.pi * 2 * category.amount / total;
+      final visibleSweep = math.max(0.008, sweep - 0.035);
+      final paint = Paint()
+        ..color = category.info.color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round;
+      canvas.drawArc(rect, start, visibleSweep, false, paint);
+      start += sweep;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CategoryPiePainter oldDelegate) => true;
+}
+
+enum _SpendingBarPeriod { daily, weekly }
+
+class _ChartBar {
+  const _ChartBar({required this.label, required this.amount});
+
+  final String label;
+  final int amount;
+}
+
+class _SpendingBarCard extends StatefulWidget {
+  const _SpendingBarCard({
+    required this.transactions,
+    required this.referenceDate,
+  });
+
+  final List<MoneyTransaction> transactions;
+  final DateTime referenceDate;
+
+  @override
+  State<_SpendingBarCard> createState() => _SpendingBarCardState();
+}
+
+class _SpendingBarCardState extends State<_SpendingBarCard> {
+  _SpendingBarPeriod _period = _SpendingBarPeriod.daily;
+
+  List<_ChartBar> get _dailyBars {
+    final today = DateTime(
+      widget.referenceDate.year,
+      widget.referenceDate.month,
+      widget.referenceDate.day,
+    );
+    return List.generate(7, (index) {
+      final date = today.subtract(Duration(days: 6 - index));
+      final amount = widget.transactions
+          .where(
+            (item) =>
+                item.date.year == date.year &&
+                item.date.month == date.month &&
+                item.date.day == date.day,
+          )
+          .fold<int>(0, (sum, item) => sum + item.amount);
+      return _ChartBar(label: '${date.day}일', amount: amount);
+    });
+  }
+
+  List<_ChartBar> get _weeklyBars {
+    final year = widget.referenceDate.year;
+    final month = widget.referenceDate.month;
+    final weekCount = (DateTime(year, month + 1, 0).day / 7).ceil();
+    return List.generate(weekCount, (index) {
+      final amount = widget.transactions
+          .where(
+            (item) =>
+                item.date.year == year &&
+                item.date.month == month &&
+                (item.date.day - 1) ~/ 7 == index,
+          )
+          .fold<int>(0, (sum, item) => sum + item.amount);
+      return _ChartBar(label: '${index + 1}주', amount: amount);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = ThemeScope.paletteOf(context);
+    final bars = _period == _SpendingBarPeriod.daily ? _dailyBars : _weeklyBars;
+    final maximum = bars.fold<int>(
+      0,
+      (value, bar) => math.max(value, bar.amount),
+    );
+    return Container(
+      key: const Key('spending-bar-card'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE9EEE9)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '소비 흐름',
+                      style: TextStyle(
+                        color: palette.text,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      _period == _SpendingBarPeriod.daily
+                          ? '최근 7일 사용량'
+                          : '이번 달 주간별 사용량',
+                      style: TextStyle(color: palette.textMuted, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: mutedBackground,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  children: [
+                    _periodButton('일별', _SpendingBarPeriod.daily),
+                    _periodButton('주별', _SpendingBarPeriod.weekly),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            height: 150,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: bars.map((bar) {
+                final ratio = maximum == 0 ? 0.0 : bar.amount / maximum;
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        SizedBox(
+                          height: 17,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              _compactChartAmount(bar.amount),
+                              style: TextStyle(
+                                color: palette.textSoft,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        SizedBox(
+                          height: 96,
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            child: AnimatedContainer(
+                              key: Key('spending-bar-${bar.label}'),
+                              duration: const Duration(milliseconds: 240),
+                              curve: Curves.easeOutCubic,
+                              width: _period == _SpendingBarPeriod.daily
+                                  ? 20
+                                  : 30,
+                              height: bar.amount == 0
+                                  ? 3
+                                  : math.max(8, 96 * ratio),
+                              decoration: BoxDecoration(
+                                color: bar.amount == 0
+                                    ? palette.accentTrack
+                                    : palette.accent,
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(7),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 7),
+                        Text(
+                          bar.label,
+                          style: TextStyle(
+                            color: palette.textMuted,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _periodButton(String label, _SpendingBarPeriod period) {
+    final palette = ThemeScope.paletteOf(context);
+    final selected = _period == period;
+    return TextButton(
+      key: Key('spending-bar-${period.name}'),
+      onPressed: () => setState(() => _period = period),
+      style: TextButton.styleFrom(
+        foregroundColor: selected ? palette.text : palette.textMuted,
+        backgroundColor: selected ? Colors.white : Colors.transparent,
+        minimumSize: const Size(46, 30),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+        shape: const StadiumBorder(),
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+String _compactChartAmount(int amount) {
+  if (amount == 0) return '0';
+  if (amount >= 100000000) {
+    return '${(amount / 100000000).toStringAsFixed(1)}억';
+  }
+  if (amount >= 10000) {
+    final value = amount / 10000;
+    return '${value >= 100 ? value.round() : value.toStringAsFixed(1)}만';
+  }
+  return formatNumber(amount);
+}
+
+class _RecentTransactionsSheet extends StatefulWidget {
+  const _RecentTransactionsSheet({
+    required this.transactions,
+    required this.initialCategories,
+  });
+
+  final List<MoneyTransaction> transactions;
+  final Set<String> initialCategories;
+
+  @override
+  State<_RecentTransactionsSheet> createState() =>
+      _RecentTransactionsSheetState();
+}
+
+class _RecentTransactionsSheetState extends State<_RecentTransactionsSheet> {
+  late final Set<String> _selectedCategories;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCategories = {...widget.initialCategories};
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = ThemeScope.paletteOf(context);
+    final visible = _selectedCategories.isEmpty
+        ? widget.transactions
+        : widget.transactions
+              .where((item) => _selectedCategories.contains(item.category))
+              .toList();
+    return FractionallySizedBox(
+      key: const Key('recent-transactions-sheet'),
+      heightFactor: 0.9,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 12, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '최근 내역',
+                        style: TextStyle(
+                          color: palette.text,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.6,
+                        ),
+                      ),
+                      Text(
+                        '이번 달 ${widget.transactions.length}건',
+                        style: TextStyle(
+                          color: palette.textMuted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: '닫기',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                  color: palette.textSoft,
+                ),
               ],
             ),
           ),
-        );
-      }
-      widgets.add(_TransactionRow(transaction: item));
-    }
-    return widgets;
+          SizedBox(
+            height: 45,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              children: [
+                ChoiceChip(
+                  key: const Key('recent-filter-all'),
+                  label: const Text('전체'),
+                  selected: _selectedCategories.isEmpty,
+                  onSelected: (_) => setState(_selectedCategories.clear),
+                  showCheckmark: false,
+                ),
+                const SizedBox(width: 7),
+                ...categoryMeta.entries.map((entry) {
+                  final selected = _selectedCategories.contains(entry.key);
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 7),
+                    child: FilterChip(
+                      key: Key('recent-filter-${entry.key}'),
+                      label: Text('${entry.value.emoji} ${entry.key}'),
+                      selected: selected,
+                      onSelected: (_) {
+                        setState(() {
+                          if (selected) {
+                            _selectedCategories.remove(entry.key);
+                          } else {
+                            _selectedCategories.add(entry.key);
+                          }
+                        });
+                      },
+                      showCheckmark: false,
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+          const Divider(height: 18, color: dividerColor),
+          Expanded(
+            child: visible.isEmpty
+                ? Center(
+                    child: Text(
+                      '선택한 카테고리의 내역이 없어요',
+                      style: TextStyle(
+                        color: palette.textMuted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  )
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                    children: _transactionWidgets(visible, palette),
+                  ),
+          ),
+        ],
+      ),
+    );
   }
+}
+
+List<Widget> _transactionWidgets(
+  List<MoneyTransaction> items,
+  AppPalette palette,
+) {
+  final widgets = <Widget>[];
+  DateTime? currentDay;
+  for (final item in items) {
+    if (currentDay == null ||
+        currentDay.year != item.date.year ||
+        currentDay.month != item.date.month ||
+        currentDay.day != item.date.day) {
+      currentDay = item.date;
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 10, bottom: 2),
+          child: Row(
+            children: [
+              Text(
+                '${item.date.month}월 ${item.date.day}일',
+                style: TextStyle(
+                  color: palette.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(child: Divider(color: dividerColor)),
+            ],
+          ),
+        ),
+      );
+    }
+    widgets.add(_TransactionRow(transaction: item));
+  }
+  return widgets;
 }
 
 class _AccountDataSection extends StatelessWidget {
   const _AccountDataSection({
-    required this.balance,
     required this.isDemoData,
     required this.lastUpdated,
     required this.notificationAccessGranted,
@@ -623,7 +1146,6 @@ class _AccountDataSection extends StatelessWidget {
     required this.onNotificationAction,
   });
 
-  final int balance;
   final bool isDemoData;
   final DateTime? lastUpdated;
   final bool notificationAccessGranted;
@@ -640,18 +1162,11 @@ class _AccountDataSection extends StatelessWidget {
               '${lastUpdated!.hour.toString().padLeft(2, '0')}:'
               '${lastUpdated!.minute.toString().padLeft(2, '0')}';
     return Container(
-      padding: const EdgeInsets.all(18),
+      key: const Key('account-data-card'),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: palette.accentBorder),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x120F2217),
-            blurRadius: 18,
-            offset: Offset(0, 7),
-          ),
-        ],
+        color: palette.accentSoft,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -659,20 +1174,20 @@ class _AccountDataSection extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 42,
-                height: 42,
+                width: 36,
+                height: 36,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: palette.accentSoft,
-                  borderRadius: BorderRadius.circular(14),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   Icons.account_balance_wallet_outlined,
                   color: palette.text,
-                  size: 22,
+                  size: 20,
                 ),
               ),
-              const SizedBox(width: 11),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -681,13 +1196,16 @@ class _AccountDataSection extends StatelessWidget {
                       '내 소비 데이터',
                       style: TextStyle(
                         color: palette.text,
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     Text(
                       isDemoData ? '예시 데이터로 표시 중' : updatedLabel,
-                      style: TextStyle(color: palette.textMuted, fontSize: 11),
+                      style: TextStyle(
+                        color: palette.textMuted,
+                        fontSize: 10.5,
+                      ),
                     ),
                   ],
                 ),
@@ -709,27 +1227,7 @@ class _AccountDataSection extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Text(
-            '현재 잔액',
-            style: TextStyle(
-              color: palette.textSoft,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            formatWon(balance),
-            key: const Key('account-balance-value'),
-            style: TextStyle(
-              color: palette.text,
-              fontSize: 25,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.8,
-            ),
-          ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
@@ -738,6 +1236,19 @@ class _AccountDataSection extends StatelessWidget {
                   onPressed: busy ? null : onImport,
                   icon: const Icon(Icons.file_open_outlined, size: 18),
                   label: const Text('내역 가져오기'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: palette.text,
+                    minimumSize: const Size(44, 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -757,24 +1268,19 @@ class _AccountDataSection extends StatelessWidget {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: palette.text,
                     side: BorderSide(color: palette.accentBorder),
-                    minimumSize: const Size(44, 50),
+                    minimumSize: const Size(44, 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                    textStyle: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '토스 계좌를 직접 연결하지 않아요. 선택한 거래내역 파일과 허용 이후의 토스 알림만 이 휴대폰에 저장해요.',
-            style: TextStyle(
-              color: palette.textMuted,
-              fontSize: 11,
-              height: 1.45,
-            ),
           ),
         ],
       ),
@@ -825,42 +1331,19 @@ class _FixedExpensesSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '구독·고정지출',
-                    style: TextStyle(
-                      color: palette.text,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '매달 빠져나가는 비용을 직접 관리해요',
-                    style: TextStyle(color: palette.textMuted, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            FilledButton.icon(
-              key: const Key('add-fixed-expense-button'),
-              onPressed: onAdd,
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: const Text('등록'),
-              style: FilledButton.styleFrom(
-                backgroundColor: palette.accent,
-                foregroundColor: palette.text,
-                padding: const EdgeInsets.symmetric(horizontal: 13),
-                textStyle: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
-          ],
+        Text(
+          '구독·고정지출',
+          style: TextStyle(
+            color: palette.text,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.5,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '매달 빠져나가는 비용을 직접 관리해요',
+          style: TextStyle(color: palette.textMuted, fontSize: 12),
         ),
         const SizedBox(height: 12),
         Container(
@@ -893,25 +1376,28 @@ class _FixedExpensesSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        if (expenses.isEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(18),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: mutedBackground,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              '등록된 고정지출이 없어요',
-              style: TextStyle(
-                color: palette.textMuted,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
+        SizedBox(
+          width: double.infinity,
+          child: TextButton(
+            key: const Key('add-fixed-expense-button'),
+            onPressed: onAdd,
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF000000),
+              backgroundColor: mutedBackground,
+              minimumSize: const Size.fromHeight(66),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              textStyle: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
               ),
             ),
-          )
-        else
+            child: const Text('+ 등록'),
+          ),
+        ),
+        if (expenses.isNotEmpty) ...[
+          const SizedBox(height: 10),
           ...expenses.map(
             (expense) => Container(
               margin: const EdgeInsets.only(bottom: 8),
@@ -986,6 +1472,7 @@ class _FixedExpensesSection extends StatelessWidget {
               ),
             ),
           ),
+        ],
       ],
     );
   }
