@@ -98,7 +98,9 @@ class _EventScreenState extends State<EventScreen> {
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -251,7 +253,11 @@ class _PointPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.monetization_on_outlined, size: 16, color: palette.textSoft),
+          Icon(
+            Icons.monetization_on_outlined,
+            size: 16,
+            color: palette.textSoft,
+          ),
           const SizedBox(width: 6),
           Text(
             '${formatNumber(points)}P',
@@ -365,7 +371,10 @@ class _AttendanceSection extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                         border: isToday
                             ? Border.all(color: palette.textSoft, width: 1.6)
-                            : Border.all(color: palette.accentBorder, width: 0.5),
+                            : Border.all(
+                                color: palette.accentBorder,
+                                width: 0.5,
+                              ),
                       ),
                       child: Center(
                         child: filled

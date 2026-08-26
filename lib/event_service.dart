@@ -38,10 +38,13 @@ class EventException implements Exception {
 /// 그대로 존재하므로, 서버가 준비되는 순간 자동으로 실데이터로 전환됩니다 —
 /// 데모 모드는 예외 상황의 폴백이지, 별도로 분기해서 관리하는 모드가 아닙니다.
 class EventService implements EventGateway {
-  EventService({required AuthGateway auth, http.Client? client, String? baseUrl})
-    : _auth = auth,
-      _client = client ?? http.Client(),
-      _baseUrl = baseUrl ?? _configuredBaseUrl;
+  EventService({
+    required AuthGateway auth,
+    http.Client? client,
+    String? baseUrl,
+  }) : _auth = auth,
+       _client = client ?? http.Client(),
+       _baseUrl = baseUrl ?? _configuredBaseUrl;
 
   static const _configuredBaseUrl = String.fromEnvironment(
     'PRODUCT_SEARCH_API_URL', // 기존 서버 주소 설정을 그대로 재사용
