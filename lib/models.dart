@@ -9,6 +9,7 @@ enum AppTab {
   shop,
   payment,
   event,
+  settings,
 }
 
 enum ThemeChoice { yellow, navy, green }

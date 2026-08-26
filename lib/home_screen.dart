@@ -13,10 +13,8 @@ class HomeScreen extends StatelessWidget {
     required this.accountBalance,
     required this.transactions,
     required this.isDemoData,
-    required this.isLoggedIn,
     required this.onThemeChanged,
     required this.onOpenNotifications,
-    required this.onOpenAccount,
     required this.onPeriodChanged,
     required this.onAmountChanged,
     required this.onOpenSpending,
@@ -30,10 +28,8 @@ class HomeScreen extends StatelessWidget {
   final int accountBalance;
   final List<MoneyTransaction> transactions;
   final bool isDemoData;
-  final bool isLoggedIn;
   final ValueChanged<ThemeChoice> onThemeChanged;
   final VoidCallback onOpenNotifications;
-  final VoidCallback onOpenAccount;
   final ValueChanged<SavingPeriod> onPeriodChanged;
   final ValueChanged<int> onAmountChanged;
   final VoidCallback onOpenSpending;
@@ -51,10 +47,8 @@ class HomeScreen extends StatelessWidget {
           _DashboardHeader(
             themeChoice: themeChoice,
             unreadCount: unreadCount,
-            isLoggedIn: isLoggedIn,
             onThemeChanged: onThemeChanged,
             onOpenNotifications: onOpenNotifications,
-            onOpenAccount: onOpenAccount,
           ),
           const SizedBox(height: 22),
           SavingPlanCard(
@@ -117,18 +111,14 @@ class _DashboardHeader extends StatelessWidget {
   const _DashboardHeader({
     required this.themeChoice,
     required this.unreadCount,
-    required this.isLoggedIn,
     required this.onThemeChanged,
     required this.onOpenNotifications,
-    required this.onOpenAccount,
   });
 
   final ThemeChoice themeChoice;
   final int unreadCount;
-  final bool isLoggedIn;
   final ValueChanged<ThemeChoice> onThemeChanged;
   final VoidCallback onOpenNotifications;
-  final VoidCallback onOpenAccount;
 
   @override
   Widget build(BuildContext context) {
@@ -248,37 +238,12 @@ class _DashboardHeader extends StatelessWidget {
           ],
         ),
         const SizedBox(width: 10),
-        Semantics(
-          label: isLoggedIn ? '계정' : '로그인',
-          button: true,
-          child: GestureDetector(
-            onTap: onOpenAccount,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                ClipOval(
-                  child: Image.asset(
-                    'assets/images/avatar.png',
-                    width: 40,
-                    height: 40,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                Positioned(
-                  bottom: -1,
-                  right: -1,
-                  child: Container(
-                    width: 14,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      color: isLoggedIn ? palette.accent : Colors.grey,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+        ClipOval(
+          child: Image.asset(
+            'assets/images/avatar.png',
+            width: 40,
+            height: 40,
+            fit: BoxFit.cover,
           ),
         ),
       ],

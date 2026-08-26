@@ -14,6 +14,7 @@ import 'home_screen.dart';
 import 'models.dart';
 import 'report_screens.dart';
 import 'seed_data.dart';
+import 'settings_screen.dart';
 import 'product_search_service.dart';
 
 class AppScrollBehavior extends MaterialScrollBehavior {
@@ -599,14 +600,18 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
         accountBalance: _accountData.balance,
         transactions: _accountData.transactions,
         isDemoData: _accountData.isDemo,
-        isLoggedIn: _currentUser != null,
         onThemeChanged: (choice) => setState(() => _themeChoice = choice),
         onOpenNotifications: _openNotifications,
-        onOpenAccount: _openAccount,
         onPeriodChanged: _changePeriod,
         onAmountChanged: _changeSavingAmount,
         onOpenSpending: _openSpending,
         onBuy: () => setState(() => _activeTab = AppTab.payment),
+      ),
+      AppTab.settings => SettingsScreen(
+        currentUser: _currentUser,
+        themeChoice: _themeChoice,
+        onThemeChanged: (choice) => setState(() => _themeChoice = choice),
+        onOpenAccount: _openAccount,
       ),
       AppTab.notifications => NotificationsScreen(
         onBack: () => setState(() => _activeTab = AppTab.home),
