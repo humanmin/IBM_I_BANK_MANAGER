@@ -1,6 +1,8 @@
 import http from 'node:http';
 import { pathToFileURL } from 'node:url';
 
+import { handleEventsRoute } from './events.mjs';
+
 const iamTokenUrl = 'https://iam.cloud.ibm.com/identity/token';
 let cachedIamToken;
 let cachedIamTokenExpiry = 0;
@@ -192,7 +194,7 @@ async function handleRequest(request, response) {
   if (request.method === 'OPTIONS') {
     response.writeHead(204, {
       'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     });
     response.end();
@@ -213,6 +215,12 @@ async function handleRequest(request, response) {
       },
     });
     return;
+  }
+
+  // 이벤트 탭 라우트 먼저 시도 (처리했으면 여기서 종료)
+  if (url.pathname.startsWith('/api/events')) {
+    const handled = await handleEventsRoute(request, response, url);
+    if (handled) return;
   }
 
   if (request.method !== 'GET' || url.pathname !== '/api/products/search') {
