@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "78964999448",
+    "project_id": "ibankmanager-c7cb8",
+    "storage_bucket": "ibankmanager-c7cb8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:78964999448:android:3ffce3b3a8b764f5374a6d",
+        "android_client_info": {
+          "package_name": "com.ibm.money.ibm_money_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBPnEhujRxkm15aHNTSVHZQsHsq-E9kg6E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import 'account_data_service.dart';
 import 'app_widgets.dart';
+import 'auth_screens.dart';
 import 'auth_service.dart';
 import 'commerce_screens.dart';
 import 'event_screens.dart';
@@ -213,7 +216,10 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   bool _notificationAccessGranted = false;
   late final ProductSearchGateway _productSearchGateway;
   late final bool _ownsProductSearchGateway;
+  late final AuthGateway _authGateway;
   late final EventGateway _eventGateway;
+  AppUser? _currentUser;
+  StreamSubscription<AppUser?>? _authSubscription;
 
   @override
   void initState() {
@@ -222,13 +228,20 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     _ownsProductSearchGateway = widget.productSearchGateway == null;
     _productSearchGateway =
         widget.productSearchGateway ?? ProductSearchService();
-    _eventGateway = EventService(auth: FirebaseAuthService());
+    _authGateway = FirebaseAuthService();
+    _eventGateway = EventService(auth: _authGateway);
+    _currentUser = _authGateway.currentUser;
+    _authSubscription = _authGateway.authStateChanges().listen((user) {
+      if (!mounted) return;
+      setState(() => _currentUser = user);
+    });
     _loadAccountData();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _authSubscription?.cancel();
     if (_ownsProductSearchGateway &&
         _productSearchGateway is ProductSearchService) {
       _productSearchGateway.close();
@@ -459,6 +472,39 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _openAccount() async {
+    final user = _currentUser;
+    if (user == null) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => LoginScreen(authGateway: _authGateway),
+        ),
+      );
+      return;
+    }
+
+    final signOut = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('계정'),
+        content: Text(user.email ?? user.uid),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('닫기'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('로그아웃'),
+          ),
+        ],
+      ),
+    );
+    if (signOut == true) {
+      await _authGateway.signOut();
+    }
+  }
+
   void _openSpending([String? category]) {
     setState(() {
       _spendingFilter = category;
@@ -553,8 +599,10 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
         accountBalance: _accountData.balance,
         transactions: _accountData.transactions,
         isDemoData: _accountData.isDemo,
+        isLoggedIn: _currentUser != null,
         onThemeChanged: (choice) => setState(() => _themeChoice = choice),
         onOpenNotifications: _openNotifications,
+        onOpenAccount: _openAccount,
         onPeriodChanged: _changePeriod,
         onAmountChanged: _changeSavingAmount,
         onOpenSpending: _openSpending,
