@@ -1,6 +1,15 @@
 import 'package:flutter/material.dart';
 
-enum AppTab { home, notifications, habits, insights, spending, shop, payment }
+enum AppTab {
+  home,
+  notifications,
+  habits,
+  insights,
+  spending,
+  shop,
+  payment,
+  event,
+}
 
 enum ThemeChoice { yellow, navy, green }
 
@@ -425,4 +434,118 @@ class BankAccount {
   final String maskedAccountNumber;
   final int balance;
   final DateTime? lastSyncedAt;
+}
+
+@immutable
+class PointBalance {
+  const PointBalance({
+    required this.totalPoints,
+    required this.currentStreakDays,
+    this.lastCheckInDate,
+  });
+
+  factory PointBalance.fromJson(Map<String, dynamic> json) {
+    return PointBalance(
+      totalPoints: (json['totalPoints'] as num?)?.round() ?? 0,
+      currentStreakDays: (json['currentStreakDays'] as num?)?.round() ?? 0,
+      lastCheckInDate: DateTime.tryParse(
+        json['lastCheckInDate']?.toString() ?? '',
+      ),
+    );
+  }
+
+  static const empty = PointBalance(totalPoints: 0, currentStreakDays: 0);
+
+  final int totalPoints;
+  final int currentStreakDays;
+  final DateTime? lastCheckInDate;
+
+  bool checkedInToday(DateTime now) {
+    final last = lastCheckInDate;
+    if (last == null) return false;
+    return last.year == now.year &&
+        last.month == now.month &&
+        last.day == now.day;
+  }
+}
+
+@immutable
+class SurveyEvent {
+  const SurveyEvent({
+    required this.id,
+    required this.title,
+    required this.durationLabel,
+    required this.rewardPoints,
+    required this.completed,
+  });
+
+  factory SurveyEvent.fromJson(Map<String, dynamic> json) {
+    return SurveyEvent(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      durationLabel: json['durationLabel']?.toString() ?? '',
+      rewardPoints: (json['rewardPoints'] as num?)?.round() ?? 0,
+      completed: json['completed'] == true,
+    );
+  }
+
+  final String id;
+  final String title;
+  final String durationLabel;
+  final int rewardPoints;
+  final bool completed;
+}
+
+@immutable
+class ReferralInfo {
+  const ReferralInfo({
+    required this.code,
+    required this.invitedCount,
+    required this.earnedPoints,
+    required this.rewardPerInvite,
+    required this.maxRewardPoints,
+  });
+
+  factory ReferralInfo.fromJson(Map<String, dynamic> json) {
+    return ReferralInfo(
+      code: json['code']?.toString() ?? '',
+      invitedCount: (json['invitedCount'] as num?)?.round() ?? 0,
+      earnedPoints: (json['earnedPoints'] as num?)?.round() ?? 0,
+      rewardPerInvite: (json['rewardPerInvite'] as num?)?.round() ?? 0,
+      maxRewardPoints: (json['maxRewardPoints'] as num?)?.round() ?? 0,
+    );
+  }
+
+  final String code;
+  final int invitedCount;
+  final int earnedPoints;
+  final int rewardPerInvite;
+  final int maxRewardPoints;
+}
+
+@immutable
+class RewardCoupon {
+  const RewardCoupon({
+    required this.id,
+    required this.name,
+    required this.costPoints,
+    required this.category,
+    required this.inStock,
+  });
+
+  factory RewardCoupon.fromJson(Map<String, dynamic> json) {
+    return RewardCoupon(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      costPoints: (json['costPoints'] as num?)?.round() ?? 0,
+      category: json['category']?.toString() ?? '',
+      inStock: json['inStock'] != false,
+    );
+  }
+
+  final String id;
+  final String name;
+  final int costPoints;
+  final String category;
+  final bool inStock;
 }

@@ -338,3 +338,47 @@ const demoNotifications = <DemoNotification>[
     body: '오늘 소비하기로 정한 한도를 넘었어요.',
   ),
 ];
+
+const demoPointBalance = PointBalance(totalPoints: 1250, currentStreakDays: 3);
+
+const demoSurveys = <SurveyEvent>[
+  SurveyEvent(
+    id: 'demo-survey-1',
+    title: '소비패턴 설문',
+    durationLabel: '2분',
+    rewardPoints: 200,
+    completed: false,
+  ),
+  SurveyEvent(
+    id: 'demo-survey-2',
+    title: '앱 사용성 피드백',
+    durationLabel: '1분',
+    rewardPoints: 150,
+    completed: false,
+  ),
+];
+
+const demoReferralInfo = ReferralInfo(
+  code: 'EUNCHAN25',
+  invitedCount: 2,
+  earnedPoints: 400,
+  rewardPerInvite: 200,
+  maxRewardPoints: 1000,
+);
+
+const demoRewards = <RewardCoupon>[
+  RewardCoupon(
+    id: 'demo-reward-1',
+    name: '스타벅스 아메리카노',
+    costPoints: 2000,
+    category: 'cafe',
+    inStock: true,
+  ),
+  RewardCoupon(
+    id: 'demo-reward-2',
+    name: 'OTT 1개월 할인권',
+    costPoints: 3500,
+    category: 'ott',
+    inStock: true,
+  ),
+];

@@ -500,6 +500,7 @@ class AppBottomNav extends StatelessWidget {
     (AppTab.home, Icons.home_outlined, '홈'),
     (AppTab.insights, Icons.chat_bubble_outline, '피드백'),
     (AppTab.spending, Icons.bar_chart_rounded, '통계'),
+    (AppTab.event, Icons.card_giftcard_rounded, '이벤트'),
     (AppTab.shop, Icons.shopping_cart_outlined, '쇼핑'),
   ];
 

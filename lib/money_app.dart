@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 
 import 'account_data_service.dart';
 import 'app_widgets.dart';
+import 'auth_service.dart';
 import 'commerce_screens.dart';
+import 'event_screens.dart';
+import 'event_service.dart';
 import 'home_screen.dart';
 import 'models.dart';
 import 'report_screens.dart';
@@ -210,6 +213,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   bool _notificationAccessGranted = false;
   late final ProductSearchGateway _productSearchGateway;
   late final bool _ownsProductSearchGateway;
+  late final EventGateway _eventGateway;
 
   @override
   void initState() {
@@ -218,6 +222,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     _ownsProductSearchGateway = widget.productSearchGateway == null;
     _productSearchGateway =
         widget.productSearchGateway ?? ProductSearchService();
+    _eventGateway = EventService(auth: FirebaseAuthService());
     _loadAccountData();
   }
 
@@ -227,6 +232,9 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     if (_ownsProductSearchGateway &&
         _productSearchGateway is ProductSearchService) {
       _productSearchGateway.close();
+    }
+    if (_eventGateway is EventService) {
+      (_eventGateway as EventService).close();
     }
     super.dispose();
   }
@@ -589,6 +597,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
         onDeleteWishItem: _deleteWishItem,
         onSelectWishItem: _selectWishItem,
       ),
+      AppTab.event => EventScreen(eventGateway: _eventGateway),
       AppTab.payment => PaymentScreen(
         goal: _goal,
         onCancel: () => setState(() => _activeTab = AppTab.home),
