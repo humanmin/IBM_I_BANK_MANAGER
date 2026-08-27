@@ -23,8 +23,10 @@ class BankApp {
 
 /// 자주 쓰는 은행/핀테크 앱 목록. 스킴은 각 사가 공개적으로 문서화했거나
 /// 널리 알려진 값 기준이며, 정책 변경 시 동작하지 않을 수 있습니다.
+const tossBankApp = BankApp(name: '토스', scheme: 'supertoss://');
+
 const bankApps = <BankApp>[
-  BankApp(name: '토스', scheme: 'supertoss://'),
+  tossBankApp,
   BankApp(name: '카카오뱅크', scheme: 'kakaobank://'),
   BankApp(name: 'KB국민은행', scheme: 'kbbank://'),
   BankApp(name: '신한 SOL뱅크', scheme: 'shinhan-sr-ib://'),
@@ -40,15 +42,14 @@ Future<DeepLinkResult> openBankApp(BankApp bank) async {
   try {
     final canLaunch = await canLaunchUrl(uri);
     if (!canLaunch) return DeepLinkResult.notInstalled;
-    final launched = await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
     return launched ? DeepLinkResult.opened : DeepLinkResult.notInstalled;
   } catch (_) {
     return DeepLinkResult.failed;
   }
 }
+
+Future<DeepLinkResult> openTossForSaving() => openBankApp(tossBankApp);
 
 /// 은행 앱을 연 뒤, 사용자가 이체를 마쳤다고 확인하면 true를 반환합니다.
 ///
@@ -190,7 +191,8 @@ class _BankPickerSheet extends StatelessWidget {
           AppSheetHeader(
             icon: Icons.savings_outlined,
             title: '은행 앱에서 저축하기',
-            subtitle: '$goalName을 위해 ${formatWon(amount)}을 이체할 은행을 고르세요. 금액은 클립보드에 복사해 두었어요.',
+            subtitle:
+                '$goalName을 위해 ${formatWon(amount)}을 이체할 은행을 고르세요. 금액은 클립보드에 복사해 두었어요.',
             onClose: () => Navigator.pop(context),
           ),
           const SizedBox(height: 16),
@@ -232,7 +234,11 @@ class _BankPickerSheet extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             '이 앱이 은행 계좌에서 돈을 옮기지는 않습니다. 이체는 은행 앱에서 직접 완료해 주세요.',
-            style: TextStyle(color: palette.textMuted, fontSize: 12, height: 1.4),
+            style: TextStyle(
+              color: palette.textMuted,
+              fontSize: 12,
+              height: 1.4,
+            ),
           ),
         ],
       ),

@@ -26,6 +26,18 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <activity
+            android:name="com.kakao.sdk.flutter.auth.AuthCodeHandlerActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="oauth"
+                    android:scheme="kakao${KAKAO_NATIVE_APP_KEY}" />
+            </intent-filter>
+        </activity>
         <service
             android:name=".TossNotificationListener"
             android:label="토스 거래 알림 자동 등록"
@@ -47,6 +59,11 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <package android:name="com.kakao.talk" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="supertoss" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

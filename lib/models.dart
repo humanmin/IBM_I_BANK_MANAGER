@@ -14,16 +14,6 @@ enum AppTab {
 
 enum ThemeChoice { navy, green }
 
-enum HomeUserProfile {
-  returningUser('김은찬', false),
-  firstTimeUser('김민진', true);
-
-  const HomeUserProfile(this.displayName, this.isFirstTime);
-
-  final String displayName;
-  final bool isFirstTime;
-}
-
 enum SavingPeriod {
   daily('하루', 1),
   everyTwoDays('이틀', 2),
@@ -449,12 +439,24 @@ class SpendingStatsData {
 
 @immutable
 class AppUser {
-  const AppUser({required this.uid, this.email, this.displayName});
+  const AppUser({
+    required this.uid,
+    required this.provider,
+    required this.isFirstTime,
+    this.email,
+    this.displayName,
+    this.photoUrl,
+  });
 
   final String uid;
+  final AuthProviderType provider;
+  final bool isFirstTime;
   final String? email;
   final String? displayName;
+  final String? photoUrl;
 }
+
+enum AuthProviderType { email, kakao, demo }
 
 @immutable
 class BankAccount {
