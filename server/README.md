@@ -1,8 +1,9 @@
-# 상품 검색 서버
+# 아이뱅크매니저 로컬 API 서버
 
 Flutter 앱에 Secret을 넣지 않기 위한 로컬 API 서버입니다.
 
 - watsonx.ai: 자연어 검색어와 최대 예산 해석
+- watsonx.ai: 월간 소비 합계와 카테고리를 분석한 `이번 달 한마디` 생성
 - SerpApi Google Shopping: 실제 상품명, 사진, 가격, 판매처 조회
 
 ## 필요한 값
@@ -33,8 +34,9 @@ flutter run -d windows --dart-define=PRODUCT_SEARCH_API_URL=http://localhost:808
 Android 에뮬레이터는 기본값 `http://10.0.2.2:8080`을 사용합니다. 실제 휴대폰은 PC와 같은 Wi-Fi에 연결한 뒤 `localhost` 대신 PC의 내부 IP를 지정합니다.
 
 USB로 연결한 실제 Android 휴대폰은 프로젝트 루트의 `run_phone.bat`을 사용하면
-`adb reverse`가 자동으로 설정됩니다. 이 방법은 Windows 방화벽이나 PC 내부 IP를
-따로 설정할 필요가 없습니다.
+현재 API 계약을 지원하는 서버 실행과 `adb reverse`가 자동으로 설정됩니다. 오래된
+`server.mjs`가 실행 중이면 최신 서버로 교체하므로 별도 서버 터미널을 먼저 열 필요가
+없습니다. 이 방법은 Windows 방화벽이나 PC 내부 IP를 따로 설정할 필요가 없습니다.
 
 ```powershell
 .\run_phone.bat

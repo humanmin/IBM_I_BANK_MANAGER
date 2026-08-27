@@ -37,14 +37,7 @@ kakao.nativeAppKey=발급받은_NATIVE_APP_KEY
 
 1. 휴대폰의 개발자 옵션과 USB 디버깅을 켭니다.
 2. USB로 PC에 연결하고 휴대폰에 나타나는 디버깅 허용 창을 승인합니다.
-3. 첫 번째 터미널에서 상품 검색 서버를 실행합니다.
-
-```powershell
-cd C:\IBM_I_BANK_MANAGER
-node --env-file=server\.env server\server.mjs
-```
-
-4. 두 번째 터미널에서 휴대폰 실행 스크립트를 실행합니다.
+3. 휴대폰 실행 스크립트를 실행합니다.
 
 ```powershell
 cd C:\IBM_I_BANK_MANAGER
@@ -52,12 +45,14 @@ cd C:\IBM_I_BANK_MANAGER
 ```
 
 휴대폰이 여러 대 연결되어 있다면 `flutter devices`에서 ID를 확인해
-`.\run_phone.bat 휴대폰_ID`로 실행합니다. 이 스크립트는 USB 포트 전달을 설정하므로
+`.\run_phone.bat 휴대폰_ID`로 실행합니다. 이 스크립트는 최신 로컬 API 서버를
+자동으로 실행하고 USB 포트 전달을 설정하므로
 휴대폰이 에뮬레이터 전용 주소 `10.0.2.2`를 사용하지 않고 PC의 검색 서버에 연결됩니다.
 개발 중에는 USB 연결과 PC의 검색 서버를 유지해야 합니다.
 
-`EADDRINUSE: 8080`이 나오면 검색 서버가 이미 실행 중이라는 뜻이므로 서버를 또
-실행하지 말고 `run_phone.bat`만 실행하면 됩니다. 휴대폰이 `offline`으로 표시되면
+예전 버전의 `server.mjs`가 8080 포트에서 실행 중이면 `run_phone.bat`이 해당
+프로세스를 최신 버전으로 안전하게 교체합니다. 다른 프로그램이 8080 포트를 사용
+중일 때는 그 프로그램을 임의로 종료하지 않고 오류를 표시합니다. 휴대폰이 `offline`으로 표시되면
 화면 잠금을 해제하고 USB 디버깅 허용 창을 승인하세요. 실행 스크립트도 오프라인
 기기에 한 번 자동 재연결을 시도합니다.
 
@@ -118,7 +113,7 @@ APK는 `build\app\outputs\flutter-apk\app-release.apk`에 생성됩니다.
 - 토스뱅크 Excel·CSV 거래내역 가져오기와 로컬 저장
 - Android 토스 지출 알림 자동 등록
 - 구독·고정지출 직접 등록·수정·삭제
-- 소비 피드백
+- watsonx AI가 월간 소비 합계와 카테고리를 분석하는 `이번 달 한마디`
 - watsonx AI로 검색 의도·예산 해석
 - 실제 온라인 상품 사진·상품명·가격 검색 및 선택
 - 검색 상품을 위시리스트와 저축 목표로 연결

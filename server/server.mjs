@@ -29,6 +29,28 @@ export function resolveWatsonxChatTarget(env = process.env) {
   };
 }
 
+export function buildHealthPayload(env = process.env) {
+  const watsonxConfigured =
+    Boolean(env.WATSONX_API_KEY) &&
+    Boolean(env.WATSONX_PROJECT_ID) &&
+    Boolean(env.WATSONX_URL) &&
+    Boolean(env.WATSONX_MODEL_ID);
+  return {
+    ok: true,
+    service: 'ibank-manager-api',
+    apiVersion: 2,
+    routes: {
+      spendingInsights: true,
+      productSearch: true,
+    },
+    configured: {
+      watsonx: watsonxConfigured,
+      spendingInsights: watsonxConfigured,
+      productSearch: Boolean(env.SERPAPI_API_KEY),
+    },
+  };
+}
+
 function sendJson(response, statusCode, data) {
   response.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -226,7 +248,10 @@ export function normalizeInsights(value) {
 const insightSystemPrompt =
   '당신은 한국어 개인 금융 코치입니다. 사용자의 월간 소비 요약(JSON)을 읽고 ' +
   '실천 가능한 피드백 카드를 1~3개 만드세요. 존댓말의 짧고 친근한 문장을 쓰고, ' +
-  '요약에 없는 금액이나 거래를 지어내지 마세요. actionCategory는 요약에 등장한 ' +
+  '요약에 없는 금액이나 거래를 지어내지 마세요. thisMonthSpent와 lastMonthSpent는 ' +
+  '각 달의 전체 지출이고 averagePerDay는 이번 달 하루 평균입니다. categories는 ' +
+  '이번 달 카테고리 합계만 포함하므로 지난달 카테고리별 금액을 추측하거나 비교하지 마세요. ' +
+  'actionCategory는 요약에 등장한 ' +
   '카테고리 이름 그대로 쓰거나 빈 문자열로 두세요. JSON 객체 {"insights": ' +
   '[{"id": string, "title": string, "body": string, "actionLabel": string, ' +
   '"actionCategory": string}]}만 반환하세요.';
@@ -302,22 +327,7 @@ async function handleRequest(request, response) {
 
   const url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
   if (request.method === 'GET' && url.pathname === '/health') {
-    sendJson(response, 200, {
-      ok: true,
-      configured: {
-        watsonx:
-          Boolean(process.env.WATSONX_API_KEY) &&
-          Boolean(process.env.WATSONX_PROJECT_ID) &&
-          Boolean(process.env.WATSONX_URL) &&
-          Boolean(process.env.WATSONX_MODEL_ID),
-        spendingInsights:
-          Boolean(process.env.WATSONX_API_KEY) &&
-          Boolean(process.env.WATSONX_PROJECT_ID) &&
-          Boolean(process.env.WATSONX_URL) &&
-          Boolean(process.env.WATSONX_MODEL_ID),
-        productSearch: Boolean(process.env.SERPAPI_API_KEY),
-      },
-    });
+    sendJson(response, 200, buildHealthPayload());
     return;
   }
 
@@ -371,7 +381,7 @@ async function handleRequest(request, response) {
 export function startServer(port = Number(process.env.PORT || 8080)) {
   const server = http.createServer(handleRequest);
   server.listen(port, '0.0.0.0', () => {
-    console.log(`Product search server listening on http://0.0.0.0:${port}`);
+    console.log(`IBM I Bank Manager API listening on http://0.0.0.0:${port}`);
   });
   return server;
 }

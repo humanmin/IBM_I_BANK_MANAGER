@@ -2,12 +2,28 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  buildHealthPayload,
   normalizeInsights,
   normalizeIntent,
   normalizeShoppingResults,
   resolveWatsonxChatTarget,
   shouldInterpretQuery,
 } from './server.mjs';
+
+test('health contract advertises the spending insights route', () => {
+  const health = buildHealthPayload({
+    WATSONX_API_KEY: 'configured',
+    WATSONX_PROJECT_ID: 'configured',
+    WATSONX_URL: 'https://example.com',
+    WATSONX_MODEL_ID: 'ibm/granite-4-h-small',
+    SERPAPI_API_KEY: 'configured',
+  });
+
+  assert.equal(health.service, 'ibank-manager-api');
+  assert.equal(health.apiVersion, 2);
+  assert.equal(health.routes.spendingInsights, true);
+  assert.equal(health.configured.spendingInsights, true);
+});
 
 test('normalizes watsonx search intent without inventing a price', () => {
   assert.deepEqual(

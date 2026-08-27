@@ -25,11 +25,10 @@ if not defined DEVICE_ID (
   exit /b 1
 )
 
-powershell -NoProfile -Command "try { $null = Invoke-RestMethod -Uri 'http://127.0.0.1:8080/health' -TimeoutSec 2; exit 0 } catch { exit 1 }"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0server\ensure_current_server.ps1"
 if errorlevel 1 (
-  echo [ERROR] Product search server is not running on port 8080.
-  echo Open another terminal and run:
-  echo node --env-file=server\.env server\server.mjs
+  echo [ERROR] The current IBM I Bank Manager API could not be started on port 8080.
+  echo Check the message above and try again.
   exit /b 1
 )
 

@@ -136,4 +136,44 @@ void main() {
       ),
     );
   });
+
+  test('insight service explains a stale server route', () async {
+    final client = MockClient((request) async {
+      return http.Response(
+        '{"error":"요청한 API를 찾을 수 없습니다."}',
+        404,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+    });
+    final service = SpendingInsightService(
+      client: client,
+      baseUrl: 'https://api.example.com',
+    );
+    addTearDown(service.close);
+
+    await expectLater(
+      service.fetch(
+        const SpendingInsightRequest(
+          year: 2026,
+          month: 8,
+          thisMonthSpent: 50000,
+          lastMonthSpent: 30000,
+          count: 4,
+          averagePerDay: 2000,
+          categories: [],
+          goalName: 'AirPods',
+          goalPrice: 299000,
+          daysToGoal: 20,
+          dailySavingAmount: 10000,
+        ),
+      ),
+      throwsA(
+        isA<SpendingInsightException>().having(
+          (error) => error.message,
+          'message',
+          contains('예전 버전의 서버'),
+        ),
+      ),
+    );
+  });
 }

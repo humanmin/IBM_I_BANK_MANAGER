@@ -150,6 +150,12 @@ class SpendingInsightService implements SpendingInsightGateway {
           .timeout(const Duration(seconds: 30));
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode != 200) {
+        if (response.statusCode == 404) {
+          throw const SpendingInsightException(
+            'PC에서 예전 버전의 서버가 실행 중이에요. '
+            'run_phone.bat을 다시 실행한 뒤 재시도해 주세요.',
+          );
+        }
         final message = body is Map<String, dynamic>
             ? body['error'] as String?
             : null;
