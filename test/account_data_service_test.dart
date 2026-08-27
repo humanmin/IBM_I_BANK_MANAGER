@@ -11,10 +11,11 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  test('stores account data separately for each user profile', () async {
+  test('does not persist first-time user account data', () async {
     final returningUserService = AccountDataService();
     final firstTimeUserService = AccountDataService(
       storageKey: 'account_data_kim_minjin_test',
+      persist: false,
     );
     final minjinData = AccountData(
       balance: 420000,
@@ -34,10 +35,13 @@ void main() {
     await firstTimeUserService.save(minjinData);
 
     expect(await returningUserService.loadSaved(), isNull);
-    final restored = await firstTimeUserService.loadSaved();
-    expect(restored, isNotNull);
-    expect(restored!.balance, 420000);
-    expect(restored.transactions.single.merchant, '테스트 카페');
+    expect(await firstTimeUserService.loadSaved(), isNull);
+    expect(
+      (await SharedPreferences.getInstance()).containsKey(
+        'account_data_kim_minjin_test',
+      ),
+      isFalse,
+    );
   });
 
   test('imports Toss-style Excel transaction statement', () {
