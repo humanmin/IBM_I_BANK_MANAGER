@@ -54,6 +54,7 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
     if (result == null || !mounted) return;
     if (item == null) {
       widget.onAddWishItem(result);
+      if (mounted) Navigator.pop(context);
     } else {
       widget.onUpdateWishItem(result);
     }
@@ -73,189 +74,241 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
   @override
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
-    return ListView(
-      key: const PageStorageKey('shop-scroll'),
-      padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
-      children: [
-        Text(
-          '내 위시리스트',
-          style: TextStyle(
-            color: palette.text,
-            fontSize: 26,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -1,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          '갖고 싶은 물건과 가격을 직접 등록해요',
-          style: TextStyle(color: palette.textMuted, fontSize: 13),
-        ),
-        const SizedBox(height: 18),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: palette.accentSoft,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            children: [
-              GoalImage(
-                imageAsset: widget.goal.imageAsset,
-                imageUrl: widget.goal.imageUrl,
-                size: 56,
-                radius: 16,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '현재 저축 목표',
-                      style: TextStyle(color: palette.textSoft, fontSize: 12),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      widget.goal.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: palette.text,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    Text(
-                      formatWon(widget.goal.price),
-                      style: TextStyle(color: palette.textSoft, fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            key: const Key('add-wish-button'),
-            onPressed: _openEditor,
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('상품 검색해서 추가'),
-            style: FilledButton.styleFrom(
-              backgroundColor: palette.accent,
-              foregroundColor: palette.text,
-              minimumSize: const Size.fromHeight(50),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              textStyle: const TextStyle(fontWeight: FontWeight.w800),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: mutedBackground,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.auto_awesome_outlined,
-                color: palette.textMuted,
-                size: 20,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'watsonx AI 상품 검색',
-                      style: TextStyle(
-                        color: palette.textSoft,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      '검색어를 이해하고 실제 상품 정보를 찾아요',
-                      style: TextStyle(color: palette.textMuted, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.check_circle_outline,
-                color: palette.textSoft,
-                size: 18,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        SavingPlanCard(
-          goal: widget.goal,
-          compact: true,
-          onPeriodChanged: widget.onPeriodChanged,
-          onAmountChanged: widget.onAmountChanged,
-        ),
-        const SizedBox(height: 24),
-        Text(
-          '내가 등록한 목표',
-          style: TextStyle(
-            color: palette.text,
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 10),
-        if (widget.wishItems.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(22),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: mutedBackground,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Column(
+    return FractionallySizedBox(
+      key: const Key('wishlist-sheet'),
+      heightFactor: 0.88,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 12, 8),
+            child: Row(
               children: [
-                Icon(Icons.favorite_border_rounded, color: palette.textMuted),
-                const SizedBox(height: 8),
-                Text(
-                  '아직 등록한 목표가 없어요',
-                  style: TextStyle(
-                    color: palette.textSoft,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '내 위시리스트',
+                        style: TextStyle(
+                          color: palette.text,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.6,
+                        ),
+                      ),
+                      Text(
+                        '갖고 싶은 물건과 가격을 직접 등록해요',
+                        style: TextStyle(
+                          color: palette.textMuted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+                IconButton(
+                  key: const Key('shop-back-button'),
+                  tooltip: '닫기',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                  color: palette.textSoft,
                 ),
               ],
             ),
-          )
-        else
-          ...widget.wishItems.map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _WishItemCard(
-                item: item,
-                selected:
-                    widget.goal.imageAsset == null &&
-                    widget.goal.name == item.name &&
-                    widget.goal.price == item.price &&
-                    widget.goal.imageUrl == item.imageUrl,
-                dailyRate: dailySavingRate(widget.goal),
-                onSelect: () => widget.onSelectWishItem(item),
-                onEdit: () => _openEditor(item),
-                onDelete: () => _confirmDelete(item),
-              ),
+          ),
+          const Divider(height: 1, color: dividerColor),
+          Expanded(
+            child: ListView(
+              key: const PageStorageKey('shop-scroll'),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: palette.accentSoft,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      GoalImage(
+                        imageAsset: widget.goal.imageAsset,
+                        imageUrl: widget.goal.imageUrl,
+                        size: 56,
+                        radius: 16,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '현재 저축 목표',
+                              style: TextStyle(
+                                color: palette.textSoft,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              widget.goal.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: palette.text,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            Text(
+                              formatWon(widget.goal.price),
+                              style: TextStyle(
+                                color: palette.textSoft,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    key: const Key('add-wish-button'),
+                    onPressed: _openEditor,
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('상품 검색해서 추가'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: palette.accent,
+                      foregroundColor: palette.text,
+                      minimumSize: const Size.fromHeight(50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: mutedBackground,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.auto_awesome_outlined,
+                        color: palette.textMuted,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'watsonx AI 상품 검색',
+                              style: TextStyle(
+                                color: palette.textSoft,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              '검색어를 이해하고 실제 상품 정보를 찾아요',
+                              style: TextStyle(
+                                color: palette.textMuted,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.check_circle_outline,
+                        color: palette.textSoft,
+                        size: 18,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SavingPlanCard(
+                  goal: widget.goal,
+                  compact: true,
+                  onPeriodChanged: widget.onPeriodChanged,
+                  onAmountChanged: widget.onAmountChanged,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  '내가 등록한 목표',
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (widget.wishItems.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(22),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: mutedBackground,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.favorite_border_rounded,
+                          color: palette.textMuted,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '아직 등록한 목표가 없어요',
+                          style: TextStyle(
+                            color: palette.textSoft,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  ...widget.wishItems.map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _WishItemCard(
+                        item: item,
+                        selected:
+                            widget.goal.imageAsset == null &&
+                            widget.goal.name == item.name &&
+                            widget.goal.price == item.price &&
+                            widget.goal.imageUrl == item.imageUrl,
+                        dailyRate: dailySavingRate(widget.goal),
+                        onSelect: () {
+                          widget.onSelectWishItem(item);
+                          Navigator.pop(context);
+                        },
+                        onEdit: () => _openEditor(item),
+                        onDelete: () => _confirmDelete(item),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
-      ],
+        ],
+      ),
     );
   }
 }

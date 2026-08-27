@@ -16,6 +16,7 @@ import 'report_screens.dart';
 import 'seed_data.dart';
 import 'settings_screen.dart';
 import 'product_search_service.dart';
+import 'spending_insight_service.dart';
 
 class AppScrollBehavior extends MaterialScrollBehavior {
   const AppScrollBehavior();
@@ -72,12 +73,11 @@ ThemeData _buildAppTheme(AppPalette palette, {required bool isDark}) {
     useMaterial3: true,
     colorScheme: colorScheme,
     scaffoldBackgroundColor: palette.pageBackground,
-    textTheme:
-        (isDark ? ThemeData.dark() : ThemeData.light()).textTheme.apply(
-          bodyColor: palette.text,
-          displayColor: palette.text,
-          fontFamily: 'sans-serif',
-        ),
+    textTheme: (isDark ? ThemeData.dark() : ThemeData.light()).textTheme.apply(
+      bodyColor: palette.text,
+      displayColor: palette.text,
+      fontFamily: 'sans-serif',
+    ),
     inputDecorationTheme: InputDecorationThemeData(
       filled: true,
       fillColor: isDark ? palette.accentSoft : const Color(0xFFF6F8F6),
@@ -192,9 +192,14 @@ ThemeData _buildAppTheme(AppPalette palette, {required bool isDark}) {
 }
 
 class MoneyApp extends StatefulWidget {
-  const MoneyApp({this.productSearchGateway, super.key});
+  const MoneyApp({
+    this.productSearchGateway,
+    this.spendingInsightGateway,
+    super.key,
+  });
 
   final ProductSearchGateway? productSearchGateway;
+  final SpendingInsightGateway? spendingInsightGateway;
 
   @override
   State<MoneyApp> createState() => _MoneyAppState();
@@ -207,7 +212,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   ThemeChoice _themeChoice = ThemeChoice.green;
   bool _isDarkMode = false;
   int _unreadCount = demoNotifications.length;
-  String? _spendingFilter;
+  String? _historyFilter;
   final List<FixedExpense> _fixedExpenses = [];
   final List<WishItem> _wishItems = [];
   final AccountDataService _accountDataService = AccountDataService();
@@ -219,10 +224,15 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   bool _notificationAccessGranted = false;
   late final ProductSearchGateway _productSearchGateway;
   late final bool _ownsProductSearchGateway;
+  late final SpendingInsightGateway _spendingInsightGateway;
+  late final bool _ownsSpendingInsightGateway;
   late final AuthGateway _authGateway;
   late final EventGateway _eventGateway;
   AppUser? _currentUser;
   StreamSubscription<AppUser?>? _authSubscription;
+  String? _insightFingerprint;
+  List<Insight>? _remoteInsights;
+  bool _insightsLoading = false;
 
   @override
   void initState() {
@@ -231,6 +241,9 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     _ownsProductSearchGateway = widget.productSearchGateway == null;
     _productSearchGateway =
         widget.productSearchGateway ?? ProductSearchService();
+    _ownsSpendingInsightGateway = widget.spendingInsightGateway == null;
+    _spendingInsightGateway =
+        widget.spendingInsightGateway ?? SpendingInsightService();
     _authGateway = FirebaseAuthService();
     _eventGateway = EventService(auth: _authGateway);
     _currentUser = _authGateway.currentUser;
@@ -248,6 +261,10 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     if (_ownsProductSearchGateway &&
         _productSearchGateway is ProductSearchService) {
       _productSearchGateway.close();
+    }
+    if (_ownsSpendingInsightGateway &&
+        _spendingInsightGateway is SpendingInsightService) {
+      _spendingInsightGateway.close();
     }
     if (_eventGateway is EventService) {
       _eventGateway.close();
@@ -296,7 +313,10 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
           message: '파일 가져오기를 취소했어요.',
         );
       }
-      if (mounted) setState(() => _accountData = result.data);
+      if (mounted) {
+        setState(() => _accountData = result.data);
+        _refreshSpendingInsights();
+      }
       final skippedText = result.skipped == 0
           ? ''
           : ' · 읽지 못한 행 ${result.skipped}개';
@@ -432,6 +452,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
       final result = await _accountDataService.syncNotifications(_accountData);
       if (mounted && !identical(result.data, _accountData)) {
         setState(() => _accountData = result.data);
+        _refreshSpendingInsights();
       }
       return AccountActionResult(
         succeeded: true,
@@ -465,8 +486,9 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   void _changeTab(AppTab tab) {
     setState(() {
       _activeTab = tab;
-      if (tab == AppTab.spending) _spendingFilter = null;
+      if (tab == AppTab.history) _historyFilter = null;
     });
+    _refreshSpendingInsights();
   }
 
   void _openNotifications() {
@@ -512,10 +534,50 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     }
   }
 
-  void _openSpending([String? category]) {
+  void _openSpending() {
+    _changeTab(AppTab.spending);
+  }
+
+  /// Ask watsonx for 통계 feedback only when the policy says so.
+  /// Local `insightsFor` cards stay on screen until a real response arrives.
+  Future<void> _refreshSpendingInsights() async {
+    final request = buildSpendingInsightRequest(
+      transactions: _accountData.transactions,
+      goal: _goal,
+      isDemo: _accountData.isDemo,
+      lastUpdated: _accountData.lastUpdated,
+    );
+    if (!shouldRequestSpendingInsights(
+      isDemoData: _accountData.isDemo,
+      isSpendingTabVisible: _activeTab == AppTab.spending,
+      fingerprint: request.fingerprint,
+      lastRequestedFingerprint: _insightFingerprint,
+    )) {
+      return;
+    }
+
+    _insightFingerprint = request.fingerprint;
+    setState(() => _insightsLoading = true);
+
+    try {
+      final insights = await _spendingInsightGateway.fetch(request);
+      if (!mounted) return;
+      if (_insightFingerprint != request.fingerprint) return;
+      setState(() {
+        _remoteInsights = insights.isEmpty ? null : insights;
+        _insightsLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      if (_insightFingerprint != request.fingerprint) return;
+      setState(() => _insightsLoading = false);
+    }
+  }
+
+  void _openHistory([String? category]) {
     setState(() {
-      _spendingFilter = category;
-      _activeTab = AppTab.spending;
+      _historyFilter = category;
+      _activeTab = AppTab.history;
     });
   }
 
@@ -550,7 +612,6 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
         imageUrl: item.imageUrl,
         clearImage: true,
       );
-      _activeTab = AppTab.home;
     });
   }
 
@@ -563,7 +624,6 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
         imageUrl: item.imageUrl,
         clearImage: true,
       );
-      _activeTab = AppTab.home;
     });
   }
 
@@ -597,43 +657,87 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _openWishlistSheet([BuildContext? hostContext]) async {
+    final context = hostContext ?? _navigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+    final palette = ThemeScope.paletteOf(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      enableDrag: true,
+      backgroundColor: palette.surface,
+      barrierColor: const Color(0x99101D14),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      builder: (sheetContext) {
+        return ThemeScope(
+          palette: palette,
+          child: StatefulBuilder(
+            builder: (context, setSheetState) {
+              void refreshSheet() => setSheetState(() {});
+              return ShoppingScreen(
+                goal: _goal,
+                wishItems: _wishItems,
+                productSearchGateway: _productSearchGateway,
+                onPeriodChanged: (period) {
+                  _changePeriod(period);
+                  refreshSheet();
+                },
+                onAmountChanged: (amount) {
+                  _changeSavingAmount(amount);
+                  refreshSheet();
+                },
+                onAddWishItem: (item) {
+                  _addWishItem(item);
+                  refreshSheet();
+                },
+                onUpdateWishItem: (item) {
+                  _updateWishItem(item);
+                  refreshSheet();
+                },
+                onDeleteWishItem: (item) {
+                  _deleteWishItem(item);
+                  refreshSheet();
+                },
+                onSelectWishItem: _selectWishItem,
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
   Widget _screen() {
     return switch (_activeTab) {
-      AppTab.home => HomeScreen(
+      AppTab.home || AppTab.shop => HomeScreen(
         goal: _goal,
-        themeChoice: _themeChoice,
         unreadCount: _unreadCount,
         accountBalance: _accountData.balance,
         transactions: _accountData.transactions,
         isDemoData: _accountData.isDemo,
-        onThemeChanged: (choice) => setState(() => _themeChoice = choice),
         onOpenNotifications: _openNotifications,
         onPeriodChanged: _changePeriod,
         onAmountChanged: _changeSavingAmount,
         onOpenSpending: _openSpending,
+        onOpenShop: (context) => _openWishlistSheet(context),
         onBuy: () => setState(() => _activeTab = AppTab.payment),
       ),
       AppTab.settings => SettingsScreen(
         currentUser: _currentUser,
         themeChoice: _themeChoice,
-        isDarkMode: _isDarkMode,
         onThemeChanged: (choice) => setState(() => _themeChoice = choice),
-        onDarkModeChanged: (value) => setState(() => _isDarkMode = value),
         onOpenAccount: _openAccount,
       ),
       AppTab.notifications => NotificationsScreen(
         onBack: () => setState(() => _activeTab = AppTab.home),
       ),
       AppTab.habits => HabitsScreen(transactions: _accountData.transactions),
-      AppTab.insights => InsightsScreen(
-        goal: _goal,
-        transactions: _accountData.transactions,
-        onOpenCategory: _openSpending,
-        onSeeGoal: () => setState(() => _activeTab = AppTab.home),
-      ),
       AppTab.spending => SpendingScreen(
-        key: ValueKey(_spendingFilter ?? 'all'),
-        initialCategory: _spendingFilter,
+        goal: _goal,
         transactions: _accountData.transactions,
         isDemoData: _accountData.isDemo,
         lastUpdated: _accountData.lastUpdated,
@@ -641,28 +745,31 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
         onImportAccountData: _importAccountData,
         onSyncNotifications: _syncTossNotifications,
         onOpenNotificationSettings: _openNotificationSettings,
+        onSeeGoal: () => setState(() => _activeTab = AppTab.home),
+        onOpenHistory: _openHistory,
         fixedExpenses: _fixedExpenses,
         onAddFixedExpense: _addFixedExpense,
         onUpdateFixedExpense: _updateFixedExpense,
         onDeleteFixedExpense: _deleteFixedExpense,
+        remoteInsights: _remoteInsights,
+        insightsLoading: _insightsLoading,
       ),
-      AppTab.shop => ShoppingScreen(
-        goal: _goal,
-        wishItems: _wishItems,
-        productSearchGateway: _productSearchGateway,
-        onPeriodChanged: _changePeriod,
-        onAmountChanged: _changeSavingAmount,
-        onAddWishItem: _addWishItem,
-        onUpdateWishItem: _updateWishItem,
-        onDeleteWishItem: _deleteWishItem,
-        onSelectWishItem: _selectWishItem,
+      AppTab.history => RecentTransactionsScreen(
+        key: ValueKey(_historyFilter ?? 'all'),
+        transactions: _accountData.transactions,
+        initialCategory: _historyFilter,
       ),
       AppTab.event => EventScreen(eventGateway: _eventGateway),
       AppTab.payment => PaymentScreen(
         goal: _goal,
         onCancel: () => setState(() => _activeTab = AppTab.home),
         onFinishHome: () => _finishPayment(AppTab.home),
-        onPickNextGoal: () => _finishPayment(AppTab.shop),
+        onPickNextGoal: () {
+          _finishPayment(AppTab.home);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _openWishlistSheet();
+          });
+        },
       ),
     };
   }
@@ -699,9 +806,23 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
                       Expanded(
                         child: AnimatedSwitcher(
                           duration: const Duration(milliseconds: 180),
+                          // Default layoutBuilder uses a center-aligned Stack.
+                          // Short tabs like Settings then float in the middle of
+                          // the screen, which looks like a huge empty gap above
+                          // the title. Pin every tab to the top instead.
+                          layoutBuilder: (currentChild, previousChildren) {
+                            return Stack(
+                              alignment: Alignment.topCenter,
+                              fit: StackFit.expand,
+                              children: [
+                                ...previousChildren,
+                                if (currentChild != null) currentChild,
+                              ],
+                            );
+                          },
                           child: KeyedSubtree(
                             key: ValueKey(_activeTab),
-                            child: _screen(),
+                            child: SizedBox.expand(child: _screen()),
                           ),
                         ),
                       ),

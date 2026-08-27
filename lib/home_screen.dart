@@ -8,31 +8,29 @@ import 'seed_data.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
     required this.goal,
-    required this.themeChoice,
     required this.unreadCount,
     required this.accountBalance,
     required this.transactions,
     required this.isDemoData,
-    required this.onThemeChanged,
     required this.onOpenNotifications,
     required this.onPeriodChanged,
     required this.onAmountChanged,
     required this.onOpenSpending,
+    required this.onOpenShop,
     required this.onBuy,
     super.key,
   });
 
   final SavingsGoal goal;
-  final ThemeChoice themeChoice;
   final int unreadCount;
   final int accountBalance;
   final List<MoneyTransaction> transactions;
   final bool isDemoData;
-  final ValueChanged<ThemeChoice> onThemeChanged;
   final VoidCallback onOpenNotifications;
   final ValueChanged<SavingPeriod> onPeriodChanged;
   final ValueChanged<int> onAmountChanged;
   final VoidCallback onOpenSpending;
+  final ValueChanged<BuildContext> onOpenShop;
   final VoidCallback onBuy;
 
   @override
@@ -45,9 +43,7 @@ class HomeScreen extends StatelessWidget {
       child: Column(
         children: [
           _DashboardHeader(
-            themeChoice: themeChoice,
             unreadCount: unreadCount,
-            onThemeChanged: onThemeChanged,
             onOpenNotifications: onOpenNotifications,
           ),
           const SizedBox(height: 22),
@@ -57,7 +53,11 @@ class HomeScreen extends StatelessWidget {
             onAmountChanged: onAmountChanged,
           ),
           const SizedBox(height: 16),
-          _GoalCard(goal: goal, onBuy: onBuy),
+          _GoalCard(
+            goal: goal,
+            onBuy: onBuy,
+            onOpenShop: () => onOpenShop(context),
+          ),
           const SizedBox(height: 16),
           SoftCard(
             color: palette.accentSoft,
@@ -109,25 +109,16 @@ class HomeScreen extends StatelessWidget {
 
 class _DashboardHeader extends StatelessWidget {
   const _DashboardHeader({
-    required this.themeChoice,
     required this.unreadCount,
-    required this.onThemeChanged,
     required this.onOpenNotifications,
   });
 
-  final ThemeChoice themeChoice;
   final int unreadCount;
-  final ValueChanged<ThemeChoice> onThemeChanged;
   final VoidCallback onOpenNotifications;
 
   @override
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
-    const themeColors = <ThemeChoice, Color>{
-      ThemeChoice.yellow: Color(0xFFFDE932),
-      ThemeChoice.navy: Color(0xFF7D8FAD),
-      ThemeChoice.green: Color(0xFF9FC4A6),
-    };
     return Row(
       children: [
         Text(
@@ -158,40 +149,6 @@ class _DashboardHeader extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: ThemeChoice.values.map((choice) {
-            final selected = choice == themeChoice;
-            return Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: Semantics(
-                label: '${choice.name} 테마',
-                selected: selected,
-                button: true,
-                child: GestureDetector(
-                  onTap: () => onThemeChanged(choice),
-                  child: Container(
-                    width: 18,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      color: themeColors[choice],
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(
-                            alpha: selected ? 0.32 : 0.15,
-                          ),
-                          spreadRadius: selected ? 1.5 : 0.5,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
         Stack(
           clipBehavior: Clip.none,
           children: [
@@ -252,10 +209,15 @@ class _DashboardHeader extends StatelessWidget {
 }
 
 class _GoalCard extends StatelessWidget {
-  const _GoalCard({required this.goal, required this.onBuy});
+  const _GoalCard({
+    required this.goal,
+    required this.onBuy,
+    required this.onOpenShop,
+  });
 
   final SavingsGoal goal;
   final VoidCallback onBuy;
+  final VoidCallback onOpenShop;
 
   @override
   Widget build(BuildContext context) {
@@ -265,9 +227,11 @@ class _GoalCard extends StatelessWidget {
     final days = daysToGoal(goal);
     return SoftCard(
       color: palette.accentSoft,
+      onTap: onOpenShop,
       child: Column(
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               GoalImage(imageAsset: goal.imageAsset, imageUrl: goal.imageUrl),
               const SizedBox(width: 14),
@@ -297,6 +261,12 @@ class _GoalCard extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                key: const Key('open-shop-button'),
+                color: palette.textSoft,
+                size: 22,
               ),
             ],
           ),

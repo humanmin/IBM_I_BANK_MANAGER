@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'bank_deeplink.dart';
 import 'models.dart';
 import 'money_utils.dart';
 
@@ -495,38 +494,6 @@ class _SavingPlanCardState extends State<SavingPlanCard> {
               ),
             ],
           ),
-          if (!widget.compact) ...[
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                key: const Key('transfer-to-bank-button'),
-                onPressed: () => showBankTransferSheet(
-                  context,
-                  amount: widget.goal.savingAmount,
-                ),
-                icon: Icon(
-                  Icons.account_balance_outlined,
-                  color: palette.text,
-                  size: 18,
-                ),
-                label: Text(
-                  '${formatNumber(widget.goal.savingAmount)}원 이체하러 가기',
-                  style: TextStyle(
-                    color: palette.text,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: palette.accentBorder),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -545,10 +512,9 @@ class AppBottomNav extends StatelessWidget {
 
   static const items = <(AppTab, IconData, String)>[
     (AppTab.home, Icons.home_outlined, '홈'),
-    (AppTab.insights, Icons.chat_bubble_outline, '피드백'),
+    (AppTab.history, Icons.receipt_long_outlined, '최근내역'),
     (AppTab.spending, Icons.bar_chart_rounded, '통계'),
     (AppTab.event, Icons.card_giftcard_rounded, '이벤트'),
-    (AppTab.shop, Icons.shopping_cart_outlined, '쇼핑'),
     (AppTab.settings, Icons.settings_outlined, '설정'),
   ];
 
@@ -588,7 +554,7 @@ class AppBottomNav extends StatelessWidget {
                           icon,
                           size: 22,
                           color: selected
-                              ? palette.text
+                              ? const Color(0xFF2F6B45)
                               : const Color(0xFF9A9A9A),
                         ),
                       ),
@@ -597,7 +563,7 @@ class AppBottomNav extends StatelessWidget {
                         label,
                         style: TextStyle(
                           color: selected
-                              ? palette.text
+                              ? const Color(0xFF2F6B45)
                               : const Color(0xFF9A9A9A),
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -613,80 +579,6 @@ class AppBottomNav extends StatelessWidget {
       ),
     );
   }
-}
-
-/// 은행 앱 딥링크 선택 바텀시트. 실제 이체는 각 은행 앱 안에서 이뤄집니다
-/// (멘토 피드백: 딥링크 방식 권장 — 이 앱은 자체 이체 API를 갖고 있지 않습니다).
-Future<void> showBankTransferSheet(
-  BuildContext context, {
-  required int amount,
-}) async {
-  final palette = ThemeScope.paletteOf(context);
-  await showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: palette.surface,
-    builder: (sheetContext) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${formatNumber(amount)}원 이체하기',
-                style: TextStyle(
-                  color: palette.text,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '은행 앱을 열어 직접 이체를 완료해 주세요.',
-                style: TextStyle(color: palette.textSoft, fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-              ...bankApps.map(
-                (bank) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    Icons.account_balance_outlined,
-                    color: palette.text,
-                  ),
-                  title: Text(
-                    bank.name,
-                    style: TextStyle(
-                      color: palette.text,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  trailing: Icon(
-                    Icons.chevron_right,
-                    color: palette.textSoft,
-                  ),
-                  onTap: () async {
-                    Navigator.of(sheetContext).pop();
-                    final result = await openBankApp(bank);
-                    if (!context.mounted) return;
-                    final message = switch (result) {
-                      DeepLinkResult.opened => '${bank.name} 앱을 열었어요.',
-                      DeepLinkResult.notInstalled =>
-                        '${bank.name} 앱이 설치돼 있지 않은 것 같아요.',
-                      DeepLinkResult.failed => '앱을 여는 데 실패했어요.',
-                    };
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text(message)));
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    },
-  );
 }
 
 /// 저축액을 줄이려고 할 때 나오는 재미있는 재확인 절차("동의 게임").
@@ -739,9 +631,7 @@ Future<bool> showReductionConsentGame(
               onChanged: (value) =>
                   setState(() => acknowledged = value ?? false),
             ),
-            const Expanded(
-              child: Text('네, 저는 목표를 향한 의지를 살짝 줄이려는 사람입니다.'),
-            ),
+            const Expanded(child: Text('네, 저는 목표를 향한 의지를 살짝 줄이려는 사람입니다.')),
           ],
         ),
         actions: [
@@ -750,9 +640,7 @@ Future<bool> showReductionConsentGame(
             child: const Text('취소'),
           ),
           FilledButton(
-            onPressed: acknowledged
-                ? () => Navigator.pop(context, true)
-                : null,
+            onPressed: acknowledged ? () => Navigator.pop(context, true) : null,
             child: const Text('줄이기'),
           ),
         ],
