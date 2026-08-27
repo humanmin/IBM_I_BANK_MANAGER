@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'account_data_service.dart';
 import 'app_widgets.dart';
@@ -206,20 +207,32 @@ class MoneyApp extends StatefulWidget {
 }
 
 class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
+  static const _selectedProfileStorageKey = 'selected_home_user_profile_v1';
+  static const _firstTimeAccountStorageKey = 'account_data_kim_minjin_v1';
+
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   AppTab _activeTab = AppTab.home;
+  HomeUserProfile _selectedProfile = HomeUserProfile.returningUser;
   SavingsGoal _goal = initialGoal;
   ThemeChoice _themeChoice = ThemeChoice.green;
-  bool _isDarkMode = false;
+  final bool _isDarkMode = false;
   int _unreadCount = demoNotifications.length;
   String? _historyFilter;
   final List<FixedExpense> _fixedExpenses = [];
   final List<WishItem> _wishItems = [];
   final AccountDataService _accountDataService = AccountDataService();
+  final AccountDataService _firstTimeAccountDataService = AccountDataService(
+    storageKey: _firstTimeAccountStorageKey,
+  );
   AccountData _accountData = AccountData(
     balance: remainingBalance,
     transactions: List.unmodifiable(transactions),
     isDemo: true,
+  );
+  AccountData _firstTimeAccountData = const AccountData(
+    balance: 0,
+    transactions: [],
+    isDemo: false,
   );
   bool _notificationAccessGranted = false;
   late final ProductSearchGateway _productSearchGateway;
@@ -281,10 +294,22 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
 
   Future<void> _loadAccountData() async {
     final saved = await _accountDataService.loadSaved();
-    final access = await _accountDataService.isNotificationAccessGranted();
+    final firstTimeSaved = await _firstTimeAccountDataService.loadSaved();
+    final preferences = await SharedPreferences.getInstance();
+    final savedProfileName = preferences.getString(_selectedProfileStorageKey);
     if (!mounted) return;
     setState(() {
       if (saved != null) _accountData = saved;
+      if (firstTimeSaved != null) _firstTimeAccountData = firstTimeSaved;
+      _selectedProfile = HomeUserProfile.values.firstWhere(
+        (profile) => profile.name == savedProfileName,
+        orElse: () => HomeUserProfile.returningUser,
+      );
+    });
+
+    final access = await _accountDataService.isNotificationAccessGranted();
+    if (!mounted) return;
+    setState(() {
       _notificationAccessGranted = access;
     });
     if (access) await _syncTossNotifications(silent: true);
@@ -302,9 +327,12 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   }
 
   Future<AccountActionResult> _importAccountData() async {
+    final profile = _selectedProfile;
+    final service = _accountDataServiceFor(profile);
+    final currentData = _accountDataFor(profile);
     try {
-      final result = await _accountDataService.importDocument(
-        _accountData,
+      final result = await service.importDocument(
+        currentData,
         requestPassword: _requestExcelPassword,
       );
       if (result == null) {
@@ -314,7 +342,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
         );
       }
       if (mounted) {
-        setState(() => _accountData = result.data);
+        setState(() => _setAccountDataFor(profile, result.data));
         _refreshSpendingInsights();
       }
       final skippedText = result.skipped == 0
@@ -448,10 +476,13 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   Future<AccountActionResult> _syncTossNotifications({
     bool silent = false,
   }) async {
+    final profile = _selectedProfile;
+    final service = _accountDataServiceFor(profile);
+    final currentData = _accountDataFor(profile);
     try {
-      final result = await _accountDataService.syncNotifications(_accountData);
-      if (mounted && !identical(result.data, _accountData)) {
-        setState(() => _accountData = result.data);
+      final result = await service.syncNotifications(currentData);
+      if (mounted && !identical(result.data, currentData)) {
+        setState(() => _setAccountDataFor(profile, result.data));
         _refreshSpendingInsights();
       }
       return AccountActionResult(
@@ -483,6 +514,22 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   AppPalette get _palette =>
       AppPalette.fromChoice(_themeChoice, isDark: _isDarkMode);
 
+  AccountDataService _accountDataServiceFor(HomeUserProfile profile) =>
+      profile.isFirstTime ? _firstTimeAccountDataService : _accountDataService;
+
+  AccountData _accountDataFor(HomeUserProfile profile) =>
+      profile.isFirstTime ? _firstTimeAccountData : _accountData;
+
+  AccountData get _activeAccountData => _accountDataFor(_selectedProfile);
+
+  void _setAccountDataFor(HomeUserProfile profile, AccountData data) {
+    if (profile.isFirstTime) {
+      _firstTimeAccountData = data;
+    } else {
+      _accountData = data;
+    }
+  }
+
   void _changeTab(AppTab tab) {
     setState(() {
       _activeTab = tab;
@@ -496,6 +543,18 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
       _unreadCount = 0;
       _activeTab = AppTab.notifications;
     });
+  }
+
+  Future<void> _changeProfile(HomeUserProfile profile) async {
+    setState(() {
+      _selectedProfile = profile;
+      _historyFilter = null;
+      _activeTab = AppTab.home;
+      _insightFingerprint = null;
+      _remoteInsights = null;
+    });
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_selectedProfileStorageKey, profile.name);
   }
 
   Future<void> _openAccount() async {
@@ -541,14 +600,15 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   /// Ask watsonx for 통계 feedback only when the policy says so.
   /// Local `insightsFor` cards stay on screen until a real response arrives.
   Future<void> _refreshSpendingInsights() async {
+    final accountData = _activeAccountData;
     final request = buildSpendingInsightRequest(
-      transactions: _accountData.transactions,
+      transactions: accountData.transactions,
       goal: _goal,
-      isDemo: _accountData.isDemo,
-      lastUpdated: _accountData.lastUpdated,
+      isDemo: accountData.isDemo,
+      lastUpdated: accountData.lastUpdated,
     );
     if (!shouldRequestSpendingInsights(
-      isDemoData: _accountData.isDemo,
+      isDemoData: accountData.isDemo,
       isSpendingTabVisible: _activeTab == AppTab.spending,
       fingerprint: request.fingerprint,
       lastRequestedFingerprint: _insightFingerprint,
@@ -681,6 +741,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
               return ShoppingScreen(
                 goal: _goal,
                 wishItems: _wishItems,
+                showEmptyState: _selectedProfile.isFirstTime,
                 productSearchGateway: _productSearchGateway,
                 onPeriodChanged: (period) {
                   _changePeriod(period);
@@ -712,13 +773,17 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   }
 
   Widget _screen() {
+    final activeAccountData = _activeAccountData;
     return switch (_activeTab) {
       AppTab.home || AppTab.shop => HomeScreen(
+        key: ValueKey(_selectedProfile),
+        selectedProfile: _selectedProfile,
         goal: _goal,
         unreadCount: _unreadCount,
-        accountBalance: _accountData.balance,
-        transactions: _accountData.transactions,
-        isDemoData: _accountData.isDemo,
+        accountBalance: activeAccountData.balance,
+        transactions: activeAccountData.transactions,
+        isDemoData: activeAccountData.isDemo,
+        onProfileChanged: _changeProfile,
         onOpenNotifications: _openNotifications,
         onPeriodChanged: _changePeriod,
         onAmountChanged: _changeSavingAmount,
@@ -735,12 +800,15 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
       AppTab.notifications => NotificationsScreen(
         onBack: () => setState(() => _activeTab = AppTab.home),
       ),
-      AppTab.habits => HabitsScreen(transactions: _accountData.transactions),
+      AppTab.habits => HabitsScreen(
+        transactions: activeAccountData.transactions,
+      ),
       AppTab.spending => SpendingScreen(
+        key: ValueKey(_selectedProfile),
         goal: _goal,
-        transactions: _accountData.transactions,
-        isDemoData: _accountData.isDemo,
-        lastUpdated: _accountData.lastUpdated,
+        transactions: activeAccountData.transactions,
+        isDemoData: activeAccountData.isDemo,
+        lastUpdated: activeAccountData.lastUpdated,
         notificationAccessGranted: _notificationAccessGranted,
         onImportAccountData: _importAccountData,
         onSyncNotifications: _syncTossNotifications,
@@ -753,10 +821,14 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
         onDeleteFixedExpense: _deleteFixedExpense,
         remoteInsights: _remoteInsights,
         insightsLoading: _insightsLoading,
+        showEmptyState:
+            _selectedProfile.isFirstTime &&
+            activeAccountData.transactions.isEmpty &&
+            activeAccountData.lastUpdated == null,
       ),
       AppTab.history => RecentTransactionsScreen(
-        key: ValueKey(_historyFilter ?? 'all'),
-        transactions: _accountData.transactions,
+        key: ValueKey('${_selectedProfile.name}-${_historyFilter ?? 'all'}'),
+        transactions: activeAccountData.transactions,
         initialCategory: _historyFilter,
       ),
       AppTab.event => EventScreen(eventGateway: _eventGateway),
@@ -816,7 +888,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
                               fit: StackFit.expand,
                               children: [
                                 ...previousChildren,
-                                if (currentChild != null) currentChild,
+                                ?currentChild,
                               ],
                             );
                           },

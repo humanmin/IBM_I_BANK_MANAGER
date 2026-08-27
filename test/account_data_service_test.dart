@@ -3,8 +3,43 @@ import 'dart:typed_data';
 import 'package:excel_plus/excel_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ibm_money_app/account_data_service.dart';
+import 'package:ibm_money_app/models.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
+  test('stores account data separately for each user profile', () async {
+    final returningUserService = AccountDataService();
+    final firstTimeUserService = AccountDataService(
+      storageKey: 'account_data_kim_minjin_test',
+    );
+    final minjinData = AccountData(
+      balance: 420000,
+      transactions: [
+        MoneyTransaction(
+          id: 'minjin-1',
+          merchant: '테스트 카페',
+          category: '카페',
+          amount: 5000,
+          date: DateTime(2026, 8, 27),
+        ),
+      ],
+      isDemo: false,
+      lastUpdated: DateTime(2026, 8, 27, 12),
+    );
+
+    await firstTimeUserService.save(minjinData);
+
+    expect(await returningUserService.loadSaved(), isNull);
+    final restored = await firstTimeUserService.loadSaved();
+    expect(restored, isNotNull);
+    expect(restored!.balance, 420000);
+    expect(restored.transactions.single.merchant, '테스트 카페');
+  });
+
   test('imports Toss-style Excel transaction statement', () {
     final workbook = Excel.createExcel();
     final sheet = workbook['Sheet1'];

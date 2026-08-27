@@ -290,6 +290,7 @@ class SpendingScreen extends StatefulWidget {
     required this.onDeleteFixedExpense,
     this.remoteInsights,
     this.insightsLoading = false,
+    this.showEmptyState = false,
     super.key,
   });
 
@@ -309,6 +310,7 @@ class SpendingScreen extends StatefulWidget {
   final ValueChanged<FixedExpense> onDeleteFixedExpense;
   final List<Insight>? remoteInsights;
   final bool insightsLoading;
+  final bool showEmptyState;
 
   @override
   State<SpendingScreen> createState() => _SpendingScreenState();
@@ -380,6 +382,75 @@ class _SpendingScreenState extends State<SpendingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = ThemeScope.paletteOf(context);
+    if (widget.showEmptyState) {
+      return ListView(
+        key: const PageStorageKey('spending-scroll'),
+        controller: _scrollController,
+        padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
+        children: [
+          const SectionHeading(
+            '이번 달 소비 통계',
+            subtitle: '거래내역을 불러오면 소비 습관을 분석해 드려요',
+          ),
+          const SizedBox(height: 18),
+          _AccountDataSection(
+            isDemoData: false,
+            isEmpty: true,
+            lastUpdated: null,
+            notificationAccessGranted: widget.notificationAccessGranted,
+            busy: _accountActionInProgress,
+            onImport: () => _runAccountAction(widget.onImportAccountData),
+            onNotificationAction: () => _runAccountAction(
+              widget.notificationAccessGranted
+                  ? widget.onSyncNotifications
+                  : widget.onOpenNotificationSettings,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SoftCard(
+            key: const Key('first-time-spending-empty'),
+            color: mutedBackground,
+            child: Column(
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: palette.surface,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Icon(
+                    Icons.donut_large_outlined,
+                    color: palette.textMuted,
+                    size: 27,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  '아직 표시할 통계가 없어요',
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '거래내역을 가져오면 카테고리별 비율과\n일별·주간별 소비를 한눈에 볼 수 있어요.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: palette.textMuted,
+                    fontSize: 13,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
     final now = DateTime.now();
     final categories = categoryTotals(
       widget.transactions,
@@ -847,7 +918,7 @@ class _RecentTransactionsScreenState extends State<RecentTransactionsScreen> {
   void initState() {
     super.initState();
     _selectedCategories = {
-      if (widget.initialCategory case final category?) category,
+      ?widget.initialCategory,
     };
   }
 
@@ -1142,6 +1213,7 @@ List<Widget> _transactionWidgets(
 class _AccountDataSection extends StatelessWidget {
   const _AccountDataSection({
     required this.isDemoData,
+    this.isEmpty = false,
     required this.lastUpdated,
     required this.notificationAccessGranted,
     required this.busy,
@@ -1150,6 +1222,7 @@ class _AccountDataSection extends StatelessWidget {
   });
 
   final bool isDemoData;
+  final bool isEmpty;
   final DateTime? lastUpdated;
   final bool notificationAccessGranted;
   final bool busy;
@@ -1204,7 +1277,11 @@ class _AccountDataSection extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      isDemoData ? '예시 데이터로 표시 중' : updatedLabel,
+                      isEmpty
+                          ? '거래내역을 불러오면 통계가 시작돼요'
+                          : isDemoData
+                          ? '예시 데이터로 표시 중'
+                          : updatedLabel,
                       style: TextStyle(
                         color: palette.textMuted,
                         fontSize: 10.5,
@@ -1220,7 +1297,11 @@ class _AccountDataSection extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  isDemoData ? 'DEMO' : '내 데이터',
+                  isEmpty
+                      ? '시작 전'
+                      : isDemoData
+                      ? 'DEMO'
+                      : '내 데이터',
                   style: TextStyle(
                     color: palette.textSoft,
                     fontSize: 10,

@@ -19,6 +19,7 @@ class ShoppingScreen extends StatefulWidget {
     required this.onUpdateWishItem,
     required this.onDeleteWishItem,
     required this.onSelectWishItem,
+    this.showEmptyState = false,
     super.key,
   });
 
@@ -31,6 +32,7 @@ class ShoppingScreen extends StatefulWidget {
   final ValueChanged<WishItem> onUpdateWishItem;
   final ValueChanged<WishItem> onDeleteWishItem;
   final ValueChanged<WishItem> onSelectWishItem;
+  final bool showEmptyState;
 
   @override
   State<ShoppingScreen> createState() => _ShoppingScreenState();
@@ -74,6 +76,157 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
   @override
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
+    if (widget.showEmptyState) {
+      return FractionallySizedBox(
+        key: const Key('wishlist-sheet'),
+        heightFactor: 0.88,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 12, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '내 위시리스트',
+                          style: TextStyle(
+                            color: palette.text,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.6,
+                          ),
+                        ),
+                        Text(
+                          '첫 상품을 찾아 나만의 저축 목표를 만들어 보세요',
+                          style: TextStyle(
+                            color: palette.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    key: const Key('shop-back-button'),
+                    tooltip: '닫기',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                    color: palette.textSoft,
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: dividerColor),
+            Expanded(
+              child: ListView(
+                key: const PageStorageKey('shop-scroll'),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                children: [
+                  SoftCard(
+                    key: const Key('first-time-shopping-empty'),
+                    color: palette.accentSoft,
+                    padding: const EdgeInsets.all(22),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 58,
+                          height: 58,
+                          decoration: BoxDecoration(
+                            color: palette.surface,
+                            borderRadius: BorderRadius.circular(19),
+                          ),
+                          child: Icon(
+                            Icons.favorite_border_rounded,
+                            color: palette.text,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(height: 15),
+                        Text(
+                          '아직 등록한 목표가 없어요',
+                          style: TextStyle(
+                            color: palette.text,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '갖고 싶은 상품을 검색하고 선택하면\n가격을 바탕으로 저축 계획을 만들어요.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: palette.textSoft,
+                            fontSize: 13,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      key: const Key('add-wish-button'),
+                      onPressed: _openEditor,
+                      icon: const Icon(Icons.search_rounded),
+                      label: const Text('첫 상품 검색하기'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: mutedBackground,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.auto_awesome_outlined,
+                          color: palette.textMuted,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'watsonx AI 상품 검색',
+                                style: TextStyle(
+                                  color: palette.textSoft,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                '상품명·사진·가격을 검색해서 보여드려요',
+                                style: TextStyle(
+                                  color: palette.textMuted,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return FractionallySizedBox(
       key: const Key('wishlist-sheet'),
       heightFactor: 0.88,

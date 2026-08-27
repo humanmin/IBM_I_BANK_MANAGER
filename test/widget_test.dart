@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,6 +7,7 @@ import 'package:ibm_money_app/models.dart';
 import 'package:ibm_money_app/money_app.dart';
 import 'package:ibm_money_app/money_utils.dart';
 import 'package:ibm_money_app/product_search_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeProductSearchGateway implements ProductSearchGateway {
   @override
@@ -23,6 +26,10 @@ class _FakeProductSearchGateway implements ProductSearchGateway {
 }
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   test('won formatting uses Korean thousands separators', () {
     expect(formatWon(118700), '118,700원');
     expect(formatWon(0), '0원');
@@ -87,6 +94,107 @@ void main() {
     await tester.tap(find.text('29,900원 결제하기'));
     await tester.pumpAndSettle();
     expect(find.text('결제 완료'), findsOneWidget);
+  });
+
+  testWidgets('account menu switches to the first-time user home', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(402, 874));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MoneyApp(productSearchGateway: _FakeProductSearchGateway()),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('first-time-user-home')), findsNothing);
+    expect(find.text('AirPods'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('account-profile-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('김민진').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('김민진'), findsOneWidget);
+    expect(find.byKey(const Key('first-time-user-home')), findsOneWidget);
+    expect(find.text('김민진님, 반가워요!'), findsOneWidget);
+    expect(find.byKey(const Key('first-goal-button')), findsOneWidget);
+    expect(find.byKey(const Key('first-import-button')), findsOneWidget);
+    expect(find.text('AirPods'), findsNothing);
+    expect(find.text('257,230원'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('nav-spending')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('first-time-spending-empty')), findsOneWidget);
+    expect(find.byKey(const Key('category-pie-chart')), findsNothing);
+    expect(find.byKey(const Key('spending-bar-card')), findsNothing);
+    expect(find.byKey(const Key('recent-transactions-button')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('nav-home')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('first-goal-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('first-time-shopping-empty')), findsOneWidget);
+    expect(find.text('AirPods'), findsNothing);
+    expect(find.text('현재 저축 목표'), findsNothing);
+    expect(find.byKey(const Key('add-wish-button')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('shop-back-button')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('account-profile-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('김은찬').last);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('first-time-user-home')), findsNothing);
+    expect(find.text('AirPods'), findsOneWidget);
+  });
+
+  testWidgets('restores the selected user and imported statistics', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    SharedPreferences.setMockInitialValues({
+      'selected_home_user_profile_v1': 'firstTimeUser',
+      'account_data_kim_minjin_v1': jsonEncode({
+        'balance': 310000,
+        'lastUpdated': now.toIso8601String(),
+        'transactions': [
+          {
+            'id': 'saved-minjin-1',
+            'merchant': '스타벅스',
+            'category': '카페',
+            'amount': 6500,
+            'date': now.toIso8601String(),
+          },
+        ],
+      }),
+    });
+    expect(
+      (await SharedPreferences.getInstance()).getString(
+        'selected_home_user_profile_v1',
+      ),
+      'firstTimeUser',
+    );
+    await tester.binding.setSurfaceSize(const Size(402, 874));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MoneyApp(productSearchGateway: _FakeProductSearchGateway()),
+    );
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.text('김민진'), findsOneWidget);
+    expect(find.text('소비 데이터 연결 완료'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('nav-spending')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('first-time-spending-empty')), findsNothing);
+    expect(find.byKey(const Key('category-pie-card')), findsOneWidget);
+    expect(find.byKey(const Key('spending-bar-card')), findsOneWidget);
+    expect(find.byKey(const Key('category-pie-chart')), findsOneWidget);
   });
 
   testWidgets('saving action wraps as a whole and stays left aligned', (

@@ -14,6 +14,16 @@ enum AppTab {
 
 enum ThemeChoice { yellow, navy, green }
 
+enum HomeUserProfile {
+  returningUser('김은찬', false),
+  firstTimeUser('김민진', true);
+
+  const HomeUserProfile(this.displayName, this.isFirstTime);
+
+  final String displayName;
+  final bool isFirstTime;
+}
+
 enum SavingPeriod {
   daily('하루', 1),
   everyTwoDays('이틀', 2),

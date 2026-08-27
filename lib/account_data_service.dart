@@ -48,18 +48,20 @@ class _NativeTransactions {
 }
 
 class AccountDataService {
-  AccountDataService();
+  AccountDataService({String storageKey = defaultStorageKey})
+    : _storageKey = storageKey;
 
   static const _channel = MethodChannel(
     'com.ibm.money.ibm_money_app/account_data',
   );
-  static const _storageKey = 'account_data_v1';
+  static const defaultStorageKey = 'account_data_v1';
 
-  SharedPreferencesAsync get _preferences => SharedPreferencesAsync();
+  final String _storageKey;
 
   Future<AccountData?> loadSaved() async {
     try {
-      final raw = await _preferences.getString(_storageKey);
+      final preferences = await SharedPreferences.getInstance();
+      final raw = preferences.getString(_storageKey);
       if (raw == null || raw.isEmpty) return null;
       final json = jsonDecode(raw) as Map<String, dynamic>;
       final items = (json['transactions'] as List<dynamic>? ?? const [])
@@ -99,7 +101,8 @@ class AccountDataService {
       'lastUpdated': data.lastUpdated?.toIso8601String(),
       'transactions': data.transactions.map(_transactionToJson).toList(),
     };
-    await _preferences.setString(_storageKey, jsonEncode(json));
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_storageKey, jsonEncode(json));
   }
 
   Future<({AccountData data, int imported, int skipped})?> importDocument(
