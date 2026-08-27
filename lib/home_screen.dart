@@ -7,58 +7,59 @@ import 'seed_data.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
-    required this.selectedProfile,
+    required this.currentUser,
     required this.goal,
     required this.unreadCount,
-    required this.accountBalance,
     required this.transactions,
-    required this.isDemoData,
-    required this.onProfileChanged,
     required this.onOpenNotifications,
     required this.onPeriodChanged,
     required this.onAmountChanged,
+    required this.onSaveWithToss,
     required this.onOpenSpending,
     required this.onOpenShop,
     required this.onBuy,
+    this.hasSelectedGoal = false,
     super.key,
   });
 
-  final HomeUserProfile selectedProfile;
+  final AppUser currentUser;
   final SavingsGoal goal;
   final int unreadCount;
-  final int accountBalance;
   final List<MoneyTransaction> transactions;
-  final bool isDemoData;
-  final ValueChanged<HomeUserProfile> onProfileChanged;
   final VoidCallback onOpenNotifications;
   final ValueChanged<SavingPeriod> onPeriodChanged;
   final ValueChanged<int> onAmountChanged;
+  final VoidCallback onSaveWithToss;
   final VoidCallback onOpenSpending;
   final ValueChanged<BuildContext> onOpenShop;
   final VoidCallback onBuy;
+  final bool hasSelectedGoal;
 
   @override
   Widget build(BuildContext context) {
-    final palette = ThemeScope.paletteOf(context);
-    final now = DateTime.now();
     return SingleChildScrollView(
       key: const PageStorageKey('home-scroll'),
       padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
       child: Column(
         children: [
           _DashboardHeader(
-            selectedProfile: selectedProfile,
+            currentUser: currentUser,
             unreadCount: unreadCount,
-            onProfileChanged: onProfileChanged,
             onOpenNotifications: onOpenNotifications,
           ),
           const SizedBox(height: 22),
-          if (selectedProfile.isFirstTime)
+          if (currentUser.isFirstTime)
             _FirstTimeUserHome(
-              userName: selectedProfile.displayName,
+              userName: currentUser.displayName ?? '사용자',
+              goal: goal,
+              hasSelectedGoal: hasSelectedGoal,
               hasAccountData: transactions.isNotEmpty,
               onOpenShop: () => onOpenShop(context),
               onOpenSpending: onOpenSpending,
+              onPeriodChanged: onPeriodChanged,
+              onAmountChanged: onAmountChanged,
+              onSaveWithToss: onSaveWithToss,
+              onBuy: onBuy,
             )
           else ...[
             SavingPlanCard(
@@ -66,54 +67,13 @@ class HomeScreen extends StatelessWidget {
               onPeriodChanged: onPeriodChanged,
               onAmountChanged: onAmountChanged,
             ),
+            const SizedBox(height: 12),
+            _SaveWithTossButton(onPressed: onSaveWithToss),
             const SizedBox(height: 16),
             _GoalCard(
               goal: goal,
               onBuy: onBuy,
               onOpenShop: () => onOpenShop(context),
-            ),
-            const SizedBox(height: 16),
-            SoftCard(
-              color: palette.accentSoft,
-              onTap: onOpenSpending,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isDemoData ? '현재 잔액 · 예시 데이터' : '현재 잔액',
-                    style: TextStyle(
-                      color: palette.textSoft,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    formatWon(accountBalance),
-                    style: TextStyle(
-                      color: palette.text,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.8,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(
-                        '이번 달 지출 ${formatWon(monthSpent(transactions, now.year, now.month))}',
-                        style: TextStyle(color: palette.textSoft, fontSize: 12),
-                      ),
-                      const Spacer(),
-                      Icon(
-                        Icons.chevron_right,
-                        color: palette.textSoft,
-                        size: 18,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
             ),
           ],
         ],
@@ -125,165 +85,209 @@ class HomeScreen extends StatelessWidget {
 class _FirstTimeUserHome extends StatelessWidget {
   const _FirstTimeUserHome({
     required this.userName,
+    required this.goal,
+    required this.hasSelectedGoal,
     required this.hasAccountData,
     required this.onOpenShop,
     required this.onOpenSpending,
+    required this.onPeriodChanged,
+    required this.onAmountChanged,
+    required this.onSaveWithToss,
+    required this.onBuy,
   });
 
   final String userName;
+  final SavingsGoal goal;
+  final bool hasSelectedGoal;
   final bool hasAccountData;
   final VoidCallback onOpenShop;
   final VoidCallback onOpenSpending;
+  final ValueChanged<SavingPeriod> onPeriodChanged;
+  final ValueChanged<int> onAmountChanged;
+  final VoidCallback onSaveWithToss;
+  final VoidCallback onBuy;
 
   @override
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
+    final savingPlanCard = SavingPlanCard(
+      key: const Key('first-time-saving-plan'),
+      goal: goal,
+      onPeriodChanged: onPeriodChanged,
+      onAmountChanged: onAmountChanged,
+    );
     return Column(
       key: const Key('first-time-user-home'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SoftCard(
-          color: palette.accentSoft,
-          padding: const EdgeInsets.all(22),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
+        savingPlanCard,
+        const SizedBox(height: 12),
+        _SaveWithTossButton(onPressed: onSaveWithToss),
+        const SizedBox(height: 16),
+        if (hasSelectedGoal)
+          _GoalCard(goal: goal, onBuy: onBuy, onOpenShop: onOpenShop)
+        else
+          SoftCard(
+            color: palette.accentSoft,
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: palette.surface.withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '처음 시작',
+                    style: TextStyle(
+                      color: palette.textSoft,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
-                decoration: BoxDecoration(
-                  color: palette.surface.withValues(alpha: 0.72),
-                  borderRadius: BorderRadius.circular(999),
+                const SizedBox(height: 18),
+                Text(
+                  '$userName님, 반가워요!',
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 25,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.8,
+                  ),
                 ),
-                child: Text(
-                  '처음 시작',
+                const SizedBox(height: 7),
+                Text(
+                  '갖고 싶은 상품을 고르면 목표 금액과\n저축 계획을 함께 만들어 드릴게요.',
                   style: TextStyle(
                     color: palette.textSoft,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    height: 1.5,
                   ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  color: palette.surface,
-                  borderRadius: BorderRadius.circular(18),
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    key: const Key('first-goal-button'),
+                    onPressed: onOpenShop,
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('첫 저축 목표 만들기'),
+                  ),
                 ),
-                child: Icon(
-                  Icons.savings_outlined,
-                  color: palette.text,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                '$userName님, 반가워요!',
-                style: TextStyle(
-                  color: palette.text,
-                  fontSize: 25,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.8,
-                ),
-              ),
-              const SizedBox(height: 7),
-              Text(
-                '갖고 싶은 상품을 고르면 목표 금액과\n저축 계획을 함께 만들어 드릴게요.',
-                style: TextStyle(
-                  color: palette.textSoft,
-                  fontSize: 14,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 22),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  key: const Key('first-goal-button'),
-                  onPressed: onOpenShop,
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('첫 저축 목표 만들기'),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
         const SizedBox(height: 16),
-        SoftCard(
-          color: mutedBackground,
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: palette.surface,
-                      borderRadius: BorderRadius.circular(14),
+        if (!hasAccountData)
+          SoftCard(
+            key: const Key('first-time-onboarding-card'),
+            color: mutedBackground,
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: palette.surface,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        hasAccountData
+                            ? Icons.check_circle_outline_rounded
+                            : Icons.account_balance_wallet_outlined,
+                        color: palette.text,
+                        size: 22,
+                      ),
                     ),
-                    child: Icon(
-                      hasAccountData
-                          ? Icons.check_circle_outline_rounded
-                          : Icons.account_balance_wallet_outlined,
-                      color: palette.text,
-                      size: 22,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          hasAccountData ? '소비 데이터 연결 완료' : '아직 소비 데이터가 없어요',
-                          style: TextStyle(
-                            color: palette.text,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            hasAccountData ? '소비 데이터 연결 완료' : '아직 소비 데이터가 없어요',
+                            style: TextStyle(
+                              color: palette.text,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          hasAccountData
-                              ? '통계 탭에서 내 소비 습관을 확인해 보세요.'
-                              : '거래내역을 불러오면 자동으로 분석해요.',
-                          style: TextStyle(
-                            color: palette.textMuted,
-                            fontSize: 12,
+                          const SizedBox(height: 2),
+                          Text(
+                            hasAccountData
+                                ? '통계 탭에서 내 소비 습관을 확인해 보세요.'
+                                : '거래내역을 불러오면 자동으로 분석해요.',
+                            style: TextStyle(
+                              color: palette.textMuted,
+                              fontSize: 12,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              const _OnboardingStep(number: '1', label: '갖고 싶은 상품 고르기'),
-              const SizedBox(height: 10),
-              const _OnboardingStep(number: '2', label: '나만의 저축 계획 정하기'),
-              const SizedBox(height: 10),
-              const _OnboardingStep(number: '3', label: '소비 내역 불러오기'),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  key: const Key('first-import-button'),
-                  onPressed: onOpenSpending,
-                  icon: const Icon(Icons.file_open_outlined, size: 19),
-                  label: Text(hasAccountData ? '소비 통계 확인하기' : '소비 데이터 가져오기'),
+                  ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 18),
+                const _OnboardingStep(number: '1', label: '갖고 싶은 상품 고르기'),
+                const SizedBox(height: 10),
+                const _OnboardingStep(number: '2', label: '나만의 저축 계획 정하기'),
+                const SizedBox(height: 10),
+                const _OnboardingStep(number: '3', label: '소비 내역 불러오기'),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    key: const Key('first-import-button'),
+                    onPressed: onOpenSpending,
+                    icon: const Icon(Icons.file_open_outlined, size: 19),
+                    label: Text(hasAccountData ? '소비 통계 확인하기' : '소비 데이터 가져오기'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _SaveWithTossButton extends StatelessWidget {
+  const _SaveWithTossButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = ThemeScope.paletteOf(context);
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: FilledButton.icon(
+        key: const Key('save-with-toss-button'),
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: palette.text,
+          foregroundColor: palette.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
           ),
         ),
-      ],
+        icon: const Icon(Icons.savings_outlined, size: 21),
+        label: const Text(
+          '저축하기',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+        ),
+      ),
     );
   }
 }
@@ -332,15 +336,13 @@ class _OnboardingStep extends StatelessWidget {
 
 class _DashboardHeader extends StatelessWidget {
   const _DashboardHeader({
-    required this.selectedProfile,
+    required this.currentUser,
     required this.unreadCount,
-    required this.onProfileChanged,
     required this.onOpenNotifications,
   });
 
-  final HomeUserProfile selectedProfile;
+  final AppUser currentUser;
   final int unreadCount;
-  final ValueChanged<HomeUserProfile> onProfileChanged;
   final VoidCallback onOpenNotifications;
 
   @override
@@ -349,7 +351,7 @@ class _DashboardHeader extends StatelessWidget {
     return Row(
       children: [
         Text(
-          selectedProfile.displayName,
+          currentUser.displayName ?? currentUser.email ?? '사용자',
           style: TextStyle(
             color: palette.text,
             fontSize: 26,
@@ -358,81 +360,21 @@ class _DashboardHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        PopupMenuButton<HomeUserProfile>(
-          key: const Key('account-profile-menu'),
-          initialValue: selectedProfile,
-          tooltip: '사용자 전환',
-          onSelected: onProfileChanged,
-          itemBuilder: (context) => HomeUserProfile.values.map((profile) {
-            final selected = profile == selectedProfile;
-            return PopupMenuItem<HomeUserProfile>(
-              value: profile,
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 15,
-                    backgroundColor: selected
-                        ? palette.accent
-                        : mutedBackground,
-                    child: Icon(
-                      selected ? Icons.check_rounded : Icons.person_outline,
-                      color: palette.text,
-                      size: 17,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          profile.displayName,
-                          style: TextStyle(
-                            color: palette.text,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        Text(
-                          profile.isFirstTime ? '처음 시작 화면' : '사용 중인 화면',
-                          style: TextStyle(
-                            color: palette.textMuted,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-          child: Container(
-            height: 28,
-            padding: const EdgeInsets.only(left: 10, right: 6),
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              color: mutedBackground,
-              borderRadius: BorderRadius.all(Radius.circular(999)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  accountLabel,
-                  style: TextStyle(
-                    color: palette.textSoft,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(width: 1),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  size: 17,
-                  color: palette.textSoft,
-                ),
-              ],
+        Container(
+          key: const Key('account-label'),
+          height: 28,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            color: mutedBackground,
+            borderRadius: BorderRadius.all(Radius.circular(999)),
+          ),
+          child: Text(
+            accountLabel,
+            style: TextStyle(
+              color: palette.textSoft,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -483,15 +425,49 @@ class _DashboardHeader extends StatelessWidget {
           ],
         ),
         const SizedBox(width: 10),
-        ClipOval(
-          child: Image.asset(
-            'assets/images/avatar.png',
-            width: 40,
-            height: 40,
-            fit: BoxFit.cover,
-          ),
+        _ProfileAvatar(
+          imageUrl: currentUser.photoUrl,
+          useDemoAsset: !currentUser.isFirstTime,
         ),
       ],
+    );
+  }
+}
+
+class _ProfileAvatar extends StatelessWidget {
+  const _ProfileAvatar({required this.imageUrl, required this.useDemoAsset});
+
+  final String? imageUrl;
+  final bool useDemoAsset;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = ThemeScope.paletteOf(context);
+    final fallback = Container(
+      width: 40,
+      height: 40,
+      color: palette.accentSoft,
+      alignment: Alignment.center,
+      child: Icon(Icons.person_rounded, color: palette.textSoft, size: 23),
+    );
+    final url = imageUrl;
+    return ClipOval(
+      child: url != null && url.isNotEmpty
+          ? Image.network(
+              url,
+              width: 40,
+              height: 40,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => fallback,
+            )
+          : useDemoAsset
+          ? Image.asset(
+              'assets/images/avatar.png',
+              width: 40,
+              height: 40,
+              fit: BoxFit.cover,
+            )
+          : fallback,
     );
   }
 }

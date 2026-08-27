@@ -11,7 +11,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  test('stores account data separately for each user profile', () async {
+  test('persists account data under an account-specific key', () async {
     final returningUserService = AccountDataService();
     final firstTimeUserService = AccountDataService(
       storageKey: 'account_data_kim_minjin_test',
@@ -38,6 +38,23 @@ void main() {
     expect(restored, isNotNull);
     expect(restored!.balance, 420000);
     expect(restored.transactions.single.merchant, '테스트 카페');
+    expect(
+      (await SharedPreferences.getInstance()).containsKey(
+        'account_data_kim_minjin_test',
+      ),
+      isTrue,
+    );
+  });
+
+  test('clearSaved removes persisted consumer data', () async {
+    final service = AccountDataService();
+    await service.save(
+      const AccountData(balance: 10, transactions: [], isDemo: false),
+    );
+
+    expect(await service.loadSaved(), isNotNull);
+    await service.clearSaved();
+    expect(await service.loadSaved(), isNull);
   });
 
   test('imports Toss-style Excel transaction statement', () {

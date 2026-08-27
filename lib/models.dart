@@ -12,17 +12,7 @@ enum AppTab {
   settings,
 }
 
-enum ThemeChoice { yellow, navy, green }
-
-enum HomeUserProfile {
-  returningUser('김은찬', false),
-  firstTimeUser('김민진', true);
-
-  const HomeUserProfile(this.displayName, this.isFirstTime);
-
-  final String displayName;
-  final bool isFirstTime;
-}
+enum ThemeChoice { navy, green }
 
 enum SavingPeriod {
   daily('하루', 1),
@@ -54,17 +44,6 @@ class AppPalette {
   factory AppPalette.fromChoice(ThemeChoice choice, {bool isDark = false}) {
     if (isDark) {
       return switch (choice) {
-        ThemeChoice.yellow => const AppPalette(
-          accent: Color(0xFFE0C43A),
-          accentSoft: Color(0xFF3A3620),
-          accentBorder: Color(0xFF4A4526),
-          accentTrack: Color(0xFF3A3620),
-          pageBackground: Color(0xFF17160F),
-          surface: Color(0xFF221F14),
-          text: Color(0xFFF0EEE3),
-          textMuted: Color(0xFF9A9683),
-          textSoft: Color(0xFFC7C2A9),
-        ),
         ThemeChoice.navy => const AppPalette(
           accent: Color(0xFF6E86AD),
           accentSoft: Color(0xFF232C3A),
@@ -90,17 +69,6 @@ class AppPalette {
       };
     }
     return switch (choice) {
-      ThemeChoice.yellow => const AppPalette(
-        accent: Color(0xFFFFEF5B),
-        accentSoft: Color(0xFFFFF6A2),
-        accentBorder: Color(0xFFF3E27A),
-        accentTrack: Color(0xFFEFE7B3),
-        pageBackground: Color(0xFFFFF9C3),
-        surface: Colors.white,
-        text: Color(0xFF1F3528),
-        textMuted: Color(0xFF7A8F7E),
-        textSoft: Color(0xFF4D6354),
-      ),
       ThemeChoice.navy => const AppPalette(
         accent: Color(0xFF93ADD9),
         accentSoft: Color(0xFFD1DFF3),
@@ -471,12 +439,24 @@ class SpendingStatsData {
 
 @immutable
 class AppUser {
-  const AppUser({required this.uid, this.email, this.displayName});
+  const AppUser({
+    required this.uid,
+    required this.provider,
+    required this.isFirstTime,
+    this.email,
+    this.displayName,
+    this.photoUrl,
+  });
 
   final String uid;
+  final AuthProviderType provider;
+  final bool isFirstTime;
   final String? email;
   final String? displayName;
+  final String? photoUrl;
 }
+
+enum AuthProviderType { email, kakao, demo }
 
 @immutable
 class BankAccount {

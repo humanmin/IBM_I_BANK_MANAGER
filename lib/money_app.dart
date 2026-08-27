@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'account_data_service.dart';
 import 'app_widgets.dart';
@@ -11,6 +10,8 @@ import 'auth_service.dart';
 import 'commerce_screens.dart';
 import 'event_screens.dart';
 import 'event_service.dart';
+import 'bank_deeplink.dart';
+import 'home_goal_widget_service.dart';
 import 'home_screen.dart';
 import 'models.dart';
 import 'report_screens.dart';
@@ -18,6 +19,7 @@ import 'seed_data.dart';
 import 'settings_screen.dart';
 import 'product_search_service.dart';
 import 'spending_insight_service.dart';
+import 'user_data_service.dart';
 
 class AppScrollBehavior extends MaterialScrollBehavior {
   const AppScrollBehavior();
@@ -196,43 +198,39 @@ class MoneyApp extends StatefulWidget {
   const MoneyApp({
     this.productSearchGateway,
     this.spendingInsightGateway,
+    this.authGateway,
+    this.goalWidgetGateway,
     super.key,
   });
 
   final ProductSearchGateway? productSearchGateway;
   final SpendingInsightGateway? spendingInsightGateway;
+  final AuthGateway? authGateway;
+  final GoalWidgetGateway? goalWidgetGateway;
 
   @override
   State<MoneyApp> createState() => _MoneyAppState();
 }
 
 class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
-  static const _selectedProfileStorageKey = 'selected_home_user_profile_v1';
-  static const _firstTimeAccountStorageKey = 'account_data_kim_minjin_v1';
-
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   AppTab _activeTab = AppTab.home;
-  HomeUserProfile _selectedProfile = HomeUserProfile.returningUser;
   SavingsGoal _goal = initialGoal;
-  ThemeChoice _themeChoice = ThemeChoice.green;
+  bool _firstTimeHasSelectedGoal = false;
   final bool _isDarkMode = false;
   int _unreadCount = demoNotifications.length;
   String? _historyFilter;
   final List<FixedExpense> _fixedExpenses = [];
   final List<WishItem> _wishItems = [];
-  final AccountDataService _accountDataService = AccountDataService();
-  final AccountDataService _firstTimeAccountDataService = AccountDataService(
-    storageKey: _firstTimeAccountStorageKey,
-  );
+  final AccountDataService _legacyAccountDataService = AccountDataService();
+  AccountDataService? _userAccountDataService;
+  UserDataService? _userDataService;
+  Future<void> _userDataSaveQueue = Future<void>.value();
+  Future<void> _goalWidgetSyncQueue = Future<void>.value();
   AccountData _accountData = AccountData(
     balance: remainingBalance,
     transactions: List.unmodifiable(transactions),
     isDemo: true,
-  );
-  AccountData _firstTimeAccountData = const AccountData(
-    balance: 0,
-    transactions: [],
-    isDemo: false,
   );
   bool _notificationAccessGranted = false;
   late final ProductSearchGateway _productSearchGateway;
@@ -240,9 +238,11 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   late final SpendingInsightGateway _spendingInsightGateway;
   late final bool _ownsSpendingInsightGateway;
   late final AuthGateway _authGateway;
+  late final GoalWidgetGateway _goalWidgetGateway;
   late final EventGateway _eventGateway;
   AppUser? _currentUser;
   StreamSubscription<AppUser?>? _authSubscription;
+  bool _authReady = false;
   String? _insightFingerprint;
   List<Insight>? _remoteInsights;
   bool _insightsLoading = false;
@@ -257,14 +257,10 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     _ownsSpendingInsightGateway = widget.spendingInsightGateway == null;
     _spendingInsightGateway =
         widget.spendingInsightGateway ?? SpendingInsightService();
-    _authGateway = FirebaseAuthService();
+    _authGateway = widget.authGateway ?? FirebaseAuthService();
+    _goalWidgetGateway = widget.goalWidgetGateway ?? HomeGoalWidgetService();
     _eventGateway = EventService(auth: _authGateway);
-    _currentUser = _authGateway.currentUser;
-    _authSubscription = _authGateway.authStateChanges().listen((user) {
-      if (!mounted) return;
-      setState(() => _currentUser = user);
-    });
-    _loadAccountData();
+    _initializeApp();
   }
 
   @override
@@ -292,44 +288,129 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _loadAccountData() async {
-    final saved = await _accountDataService.loadSaved();
-    final firstTimeSaved = await _firstTimeAccountDataService.loadSaved();
-    final preferences = await SharedPreferences.getInstance();
-    final savedProfileName = preferences.getString(_selectedProfileStorageKey);
+  Future<void> _initializeApp() async {
+    final restoredUser = await _authGateway.restoreSession();
+    if (restoredUser != null) {
+      await _restoreUserData(restoredUser);
+    } else {
+      await _queueGoalWidgetClear();
+    }
     if (!mounted) return;
     setState(() {
-      if (saved != null) _accountData = saved;
-      if (firstTimeSaved != null) _firstTimeAccountData = firstTimeSaved;
-      _selectedProfile = HomeUserProfile.values.firstWhere(
-        (profile) => profile.name == savedProfileName,
-        orElse: () => HomeUserProfile.returningUser,
-      );
+      _currentUser = restoredUser;
+      _authReady = true;
+    });
+    _authSubscription = _authGateway.authStateChanges().listen((user) {
+      unawaited(_applyAuthenticatedUser(user));
     });
 
-    final access = await _accountDataService.isNotificationAccessGranted();
+    final access = await _legacyAccountDataService
+        .isNotificationAccessGranted();
     if (!mounted) return;
+    setState(() => _notificationAccessGranted = access);
+    if (access && restoredUser != null && !restoredUser.isFirstTime) {
+      await _syncTossNotifications(silent: true);
+    }
+  }
+
+  Future<void> _applyAuthenticatedUser(AppUser? user) async {
+    if (!mounted) return;
+    final changedAccount = _currentUser?.uid != user?.uid;
+    if (user != null && changedAccount) {
+      await _restoreUserData(user);
+      if (!mounted) return;
+    } else if (user == null) {
+      await _queueGoalWidgetClear();
+    }
     setState(() {
-      _notificationAccessGranted = access;
+      _currentUser = user;
+      _authReady = true;
+      _activeTab = AppTab.home;
+      _historyFilter = null;
     });
-    if (access) await _syncTossNotifications(silent: true);
+  }
+
+  Future<void> _restoreUserData(AppUser user) async {
+    final accountService = AccountDataService(
+      storageKey: 'account_data_v2_${UserDataService.keyForUser(user.uid)}',
+    );
+    final userDataService = UserDataService(userId: user.uid);
+    var accountData = await accountService.loadSaved();
+
+    // 기존 버전의 단일 계정 저장값은 현재 로그인한 계정으로 한 번만 옮깁니다.
+    if (accountData == null) {
+      final legacyData = await _legacyAccountDataService.loadSaved();
+      if (legacyData != null) {
+        accountData = legacyData;
+        await accountService.save(legacyData);
+        await _legacyAccountDataService.clearSaved();
+      }
+    }
+
+    final storedUserData = await userDataService.load();
+    _userAccountDataService = accountService;
+    _userDataService = userDataService;
+    _accountData = accountData ?? _defaultAccountDataFor(user);
+    _goal = storedUserData?.goal ?? initialGoal;
+    _firstTimeHasSelectedGoal =
+        storedUserData?.hasSelectedGoal ?? !user.isFirstTime;
+    _wishItems
+      ..clear()
+      ..addAll(storedUserData?.wishItems ?? const []);
+    _fixedExpenses
+      ..clear()
+      ..addAll(storedUserData?.fixedExpenses ?? const []);
+    _insightFingerprint = null;
+    _remoteInsights = null;
+    unawaited(
+      _queueGoalWidgetSync(
+        goal: _goal,
+        hasSelectedGoal: _firstTimeHasSelectedGoal,
+      ),
+    );
+  }
+
+  AccountData _defaultAccountDataFor(AppUser user) {
+    if (user.isFirstTime) {
+      return const AccountData(balance: 0, transactions: [], isDemo: false);
+    }
+    return AccountData(
+      balance: remainingBalance,
+      transactions: List.unmodifiable(transactions),
+      isDemo: true,
+    );
+  }
+
+  void _resetFirstTimeSession() {
+    _accountData = const AccountData(
+      balance: 0,
+      transactions: [],
+      isDemo: false,
+    );
+    _goal = initialGoal;
+    _firstTimeHasSelectedGoal = false;
+    _fixedExpenses.clear();
+    _wishItems.clear();
+    _insightFingerprint = null;
+    _remoteInsights = null;
   }
 
   Future<void> _refreshNotificationAccess({
     bool syncWhenGranted = false,
   }) async {
-    final granted = await _accountDataService.isNotificationAccessGranted();
+    final granted = await _legacyAccountDataService
+        .isNotificationAccessGranted();
     if (!mounted) return;
     setState(() => _notificationAccessGranted = granted);
-    if (granted && syncWhenGranted) {
+    if (granted && syncWhenGranted && !_isFirstTimeUser) {
       await _syncTossNotifications(silent: true);
     }
   }
 
   Future<AccountActionResult> _importAccountData() async {
-    final profile = _selectedProfile;
-    final service = _accountDataServiceFor(profile);
-    final currentData = _accountDataFor(profile);
+    final firstTimeUser = _isFirstTimeUser;
+    final service = _accountDataServiceFor(firstTimeUser);
+    final currentData = _accountDataFor(firstTimeUser);
     try {
       final result = await service.importDocument(
         currentData,
@@ -342,7 +423,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
         );
       }
       if (mounted) {
-        setState(() => _setAccountDataFor(profile, result.data));
+        setState(() => _setAccountDataFor(firstTimeUser, result.data));
         _refreshSpendingInsights();
       }
       final skippedText = result.skipped == 0
@@ -476,13 +557,13 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   Future<AccountActionResult> _syncTossNotifications({
     bool silent = false,
   }) async {
-    final profile = _selectedProfile;
-    final service = _accountDataServiceFor(profile);
-    final currentData = _accountDataFor(profile);
+    final firstTimeUser = _isFirstTimeUser;
+    final service = _accountDataServiceFor(firstTimeUser);
+    final currentData = _accountDataFor(firstTimeUser);
     try {
       final result = await service.syncNotifications(currentData);
       if (mounted && !identical(result.data, currentData)) {
-        setState(() => _setAccountDataFor(profile, result.data));
+        setState(() => _setAccountDataFor(firstTimeUser, result.data));
         _refreshSpendingInsights();
       }
       return AccountActionResult(
@@ -501,7 +582,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
 
   Future<AccountActionResult> _openNotificationSettings() async {
     try {
-      await _accountDataService.openNotificationAccessSettings();
+      await _legacyAccountDataService.openNotificationAccessSettings();
       return const AccountActionResult(
         succeeded: true,
         message: '설정에서 아이뱅크매니저의 알림 접근을 허용해 주세요.',
@@ -512,22 +593,59 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   }
 
   AppPalette get _palette =>
-      AppPalette.fromChoice(_themeChoice, isDark: _isDarkMode);
+      AppPalette.fromChoice(ThemeChoice.green, isDark: _isDarkMode);
 
-  AccountDataService _accountDataServiceFor(HomeUserProfile profile) =>
-      profile.isFirstTime ? _firstTimeAccountDataService : _accountDataService;
+  bool get _isFirstTimeUser => _currentUser?.isFirstTime ?? true;
 
-  AccountData _accountDataFor(HomeUserProfile profile) =>
-      profile.isFirstTime ? _firstTimeAccountData : _accountData;
+  AccountDataService _accountDataServiceFor(bool firstTimeUser) =>
+      _userAccountDataService ?? _legacyAccountDataService;
 
-  AccountData get _activeAccountData => _accountDataFor(_selectedProfile);
+  AccountData _accountDataFor(bool firstTimeUser) => _accountData;
 
-  void _setAccountDataFor(HomeUserProfile profile, AccountData data) {
-    if (profile.isFirstTime) {
-      _firstTimeAccountData = data;
-    } else {
-      _accountData = data;
-    }
+  AccountData get _activeAccountData => _accountDataFor(_isFirstTimeUser);
+
+  void _setAccountDataFor(bool firstTimeUser, AccountData data) {
+    _accountData = data;
+  }
+
+  void _persistUserData() {
+    final service = _userDataService;
+    if (service == null) return;
+    final goal = _goal;
+    final hasSelectedGoal = _firstTimeHasSelectedGoal;
+    final wishItems = List<WishItem>.of(_wishItems);
+    final fixedExpenses = List<FixedExpense>.of(_fixedExpenses);
+    _userDataSaveQueue = _userDataSaveQueue.then((_) async {
+      await service.save(
+        goal: goal,
+        hasSelectedGoal: hasSelectedGoal,
+        wishItems: wishItems,
+        fixedExpenses: fixedExpenses,
+      );
+    });
+    unawaited(
+      _queueGoalWidgetSync(goal: goal, hasSelectedGoal: hasSelectedGoal),
+    );
+  }
+
+  Future<void> _queueGoalWidgetSync({
+    required SavingsGoal goal,
+    required bool hasSelectedGoal,
+  }) {
+    _goalWidgetSyncQueue = _goalWidgetSyncQueue.then(
+      (_) => _goalWidgetGateway.syncGoal(
+        goal: goal,
+        hasSelectedGoal: hasSelectedGoal,
+      ),
+    );
+    return _goalWidgetSyncQueue;
+  }
+
+  Future<void> _queueGoalWidgetClear() {
+    _goalWidgetSyncQueue = _goalWidgetSyncQueue.then(
+      (_) => _goalWidgetGateway.clear(),
+    );
+    return _goalWidgetSyncQueue;
   }
 
   void _changeTab(AppTab tab) {
@@ -545,37 +663,20 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _changeProfile(HomeUserProfile profile) async {
-    setState(() {
-      _selectedProfile = profile;
-      _historyFilter = null;
-      _activeTab = AppTab.home;
-      _insightFingerprint = null;
-      _remoteInsights = null;
-    });
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_selectedProfileStorageKey, profile.name);
-  }
-
   Future<void> _openAccount() async {
     final navigatorContext = _navigatorKey.currentContext;
     if (!mounted || navigatorContext == null) return;
 
     final user = _currentUser;
-    if (user == null) {
-      await Navigator.of(navigatorContext).push(
-        MaterialPageRoute(
-          builder: (_) => LoginScreen(authGateway: _authGateway),
-        ),
-      );
-      return;
-    }
+    if (user == null) return;
 
     final signOut = await showDialog<bool>(
       context: navigatorContext,
       builder: (context) => AlertDialog(
         title: const Text('계정'),
-        content: Text(user.email ?? user.uid),
+        content: Text(
+          [user.displayName, user.email].whereType<String>().join('\n'),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -643,14 +744,42 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
 
   void _changePeriod(SavingPeriod period) {
     setState(() => _goal = _goal.copyWith(savingPeriod: period));
+    _persistUserData();
   }
 
   void _changeSavingAmount(int amount) {
     setState(() => _goal = _goal.copyWith(savingAmount: amount));
+    _persistUserData();
+  }
+
+  Future<void> _openTossForSaving() async {
+    final result = await openTossForSaving();
+    if (!mounted || result == DeepLinkResult.opened) return;
+    final context = _navigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('토스 앱을 열 수 없어요. 토스가 설치되어 있는지 확인해 주세요.')),
+    );
+  }
+
+  Future<void> _deleteCurrentAccount() async {
+    final accountService = _userAccountDataService;
+    final userDataService = _userDataService;
+    await _authGateway.deleteAccount();
+    await accountService?.clearSaved();
+    await userDataService?.clear();
+    await _queueGoalWidgetClear();
+    if (!mounted) return;
+    setState(() {
+      _resetFirstTimeSession();
+      _userAccountDataService = null;
+      _userDataService = null;
+    });
   }
 
   void _addFixedExpense(FixedExpense expense) {
     setState(() => _fixedExpenses.add(expense));
+    _persistUserData();
   }
 
   void _updateFixedExpense(FixedExpense expense) {
@@ -658,33 +787,39 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
       final index = _fixedExpenses.indexWhere((item) => item.id == expense.id);
       if (index != -1) _fixedExpenses[index] = expense;
     });
+    _persistUserData();
   }
 
   void _deleteFixedExpense(FixedExpense expense) {
     setState(() => _fixedExpenses.removeWhere((item) => item.id == expense.id));
+    _persistUserData();
+  }
+
+  void _applyWishItemToGoal(WishItem item) {
+    final isFirstGoal = _isFirstTimeUser && !_firstTimeHasSelectedGoal;
+    _goal = _goal.copyWith(
+      name: item.name,
+      price: item.price,
+      imageUrl: item.imageUrl,
+      clearImage: true,
+      saved: isFirstGoal ? 0 : null,
+    );
+    if (_isFirstTimeUser) {
+      _firstTimeHasSelectedGoal = true;
+    }
   }
 
   void _selectWishItem(WishItem item) {
-    setState(() {
-      _goal = _goal.copyWith(
-        name: item.name,
-        price: item.price,
-        imageUrl: item.imageUrl,
-        clearImage: true,
-      );
-    });
+    setState(() => _applyWishItemToGoal(item));
+    _persistUserData();
   }
 
   void _addWishItem(WishItem item) {
     setState(() {
       _wishItems.add(item);
-      _goal = _goal.copyWith(
-        name: item.name,
-        price: item.price,
-        imageUrl: item.imageUrl,
-        clearImage: true,
-      );
+      _applyWishItemToGoal(item);
     });
+    _persistUserData();
   }
 
   void _updateWishItem(WishItem item) {
@@ -703,10 +838,12 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
         );
       }
     });
+    _persistUserData();
   }
 
   void _deleteWishItem(WishItem item) {
     setState(() => _wishItems.removeWhere((entry) => entry.id == item.id));
+    _persistUserData();
   }
 
   void _finishPayment(AppTab destination) {
@@ -715,6 +852,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
       _goal = _goal.copyWith(saved: leftover);
       _activeTab = destination;
     });
+    _persistUserData();
   }
 
   Future<void> _openWishlistSheet([BuildContext? hostContext]) async {
@@ -741,7 +879,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
               return ShoppingScreen(
                 goal: _goal,
                 wishItems: _wishItems,
-                showEmptyState: _selectedProfile.isFirstTime,
+                showEmptyState: _isFirstTimeUser && !_firstTimeHasSelectedGoal,
                 productSearchGateway: _productSearchGateway,
                 onPeriodChanged: (period) {
                   _changePeriod(period);
@@ -774,28 +912,27 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
 
   Widget _screen() {
     final activeAccountData = _activeAccountData;
+    final currentUser = _currentUser!;
     return switch (_activeTab) {
       AppTab.home || AppTab.shop => HomeScreen(
-        key: ValueKey(_selectedProfile),
-        selectedProfile: _selectedProfile,
+        key: ValueKey(currentUser.uid),
+        currentUser: currentUser,
         goal: _goal,
         unreadCount: _unreadCount,
-        accountBalance: activeAccountData.balance,
         transactions: activeAccountData.transactions,
-        isDemoData: activeAccountData.isDemo,
-        onProfileChanged: _changeProfile,
         onOpenNotifications: _openNotifications,
         onPeriodChanged: _changePeriod,
         onAmountChanged: _changeSavingAmount,
+        onSaveWithToss: _openTossForSaving,
         onOpenSpending: _openSpending,
         onOpenShop: (context) => _openWishlistSheet(context),
         onBuy: () => setState(() => _activeTab = AppTab.payment),
+        hasSelectedGoal: _firstTimeHasSelectedGoal,
       ),
       AppTab.settings => SettingsScreen(
         currentUser: _currentUser,
-        themeChoice: _themeChoice,
-        onThemeChanged: (choice) => setState(() => _themeChoice = choice),
         onOpenAccount: _openAccount,
+        onDeleteAccount: _deleteCurrentAccount,
       ),
       AppTab.notifications => NotificationsScreen(
         onBack: () => setState(() => _activeTab = AppTab.home),
@@ -804,7 +941,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
         transactions: activeAccountData.transactions,
       ),
       AppTab.spending => SpendingScreen(
-        key: ValueKey(_selectedProfile),
+        key: ValueKey(currentUser.uid),
         goal: _goal,
         transactions: activeAccountData.transactions,
         isDemoData: activeAccountData.isDemo,
@@ -822,12 +959,12 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
         remoteInsights: _remoteInsights,
         insightsLoading: _insightsLoading,
         showEmptyState:
-            _selectedProfile.isFirstTime &&
+            _isFirstTimeUser &&
             activeAccountData.transactions.isEmpty &&
             activeAccountData.lastUpdated == null,
       ),
       AppTab.history => RecentTransactionsScreen(
-        key: ValueKey('${_selectedProfile.name}-${_historyFilter ?? 'all'}'),
+        key: ValueKey('${currentUser.uid}-${_historyFilter ?? 'all'}'),
         transactions: activeAccountData.transactions,
         initialCategory: _historyFilter,
       ),
@@ -857,59 +994,69 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
         title: '아이뱅크매니저',
         scrollBehavior: const AppScrollBehavior(),
         theme: _buildAppTheme(palette, isDark: _isDarkMode),
-        home: PopScope(
-          canPop: _activeTab == AppTab.home,
-          onPopInvokedWithResult: (didPop, _) {
-            if (!didPop && _activeTab != AppTab.home) {
-              setState(() => _activeTab = AppTab.home);
-            }
-          },
-          child: Scaffold(
-            backgroundColor: palette.pageBackground,
-            body: SafeArea(
-              bottom: _activeTab == AppTab.payment,
-              child: Center(
-                child: Container(
-                  width: double.infinity,
-                  constraints: const BoxConstraints(maxWidth: 430),
-                  color: palette.surface,
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 180),
-                          // Default layoutBuilder uses a center-aligned Stack.
-                          // Short tabs like Settings then float in the middle of
-                          // the screen, which looks like a huge empty gap above
-                          // the title. Pin every tab to the top instead.
-                          layoutBuilder: (currentChild, previousChildren) {
-                            return Stack(
-                              alignment: Alignment.topCenter,
-                              fit: StackFit.expand,
-                              children: [
-                                ...previousChildren,
-                                ?currentChild,
-                              ],
-                            );
-                          },
-                          child: KeyedSubtree(
-                            key: ValueKey(_activeTab),
-                            child: SizedBox.expand(child: _screen()),
-                          ),
+        home: !_authReady
+            ? Scaffold(
+                backgroundColor: palette.pageBackground,
+                body: Center(
+                  child: CircularProgressIndicator(color: palette.accent),
+                ),
+              )
+            : _currentUser == null
+            ? AuthWelcomeScreen(authGateway: _authGateway)
+            : PopScope(
+                canPop: _activeTab == AppTab.home,
+                onPopInvokedWithResult: (didPop, _) {
+                  if (!didPop && _activeTab != AppTab.home) {
+                    setState(() => _activeTab = AppTab.home);
+                  }
+                },
+                child: Scaffold(
+                  backgroundColor: palette.pageBackground,
+                  body: SafeArea(
+                    bottom: _activeTab == AppTab.payment,
+                    child: Center(
+                      child: Container(
+                        width: double.infinity,
+                        constraints: const BoxConstraints(maxWidth: 430),
+                        color: palette.surface,
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 180),
+                                // Default layoutBuilder uses a center-aligned Stack.
+                                // Short tabs like Settings then float in the middle of
+                                // the screen, which looks like a huge empty gap above
+                                // the title. Pin every tab to the top instead.
+                                layoutBuilder:
+                                    (currentChild, previousChildren) {
+                                      return Stack(
+                                        alignment: Alignment.topCenter,
+                                        fit: StackFit.expand,
+                                        children: [
+                                          ...previousChildren,
+                                          ?currentChild,
+                                        ],
+                                      );
+                                    },
+                                child: KeyedSubtree(
+                                  key: ValueKey(_activeTab),
+                                  child: SizedBox.expand(child: _screen()),
+                                ),
+                              ),
+                            ),
+                            if (_activeTab != AppTab.payment)
+                              AppBottomNav(
+                                activeTab: _activeTab,
+                                onChanged: _changeTab,
+                              ),
+                          ],
                         ),
                       ),
-                      if (_activeTab != AppTab.payment)
-                        AppBottomNav(
-                          activeTab: _activeTab,
-                          onChanged: _changeTab,
-                        ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
-        ),
       ),
     );
   }

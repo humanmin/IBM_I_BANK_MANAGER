@@ -1,6 +1,8 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 
+import 'auth_service.dart';
 import 'firebase_options.dart';
 import 'money_app.dart';
 
@@ -12,6 +14,9 @@ void main() async {
     );
   } catch (_) {
     // Firebase 연결 실패해도 앱은 계속 실행 (로그인 기능만 비활성)
+  }
+  if (kakaoNativeAppKey.isNotEmpty) {
+    await KakaoSdk.init(nativeAppKey: kakaoNativeAppKey);
   }
   runApp(const MoneyApp());
 }

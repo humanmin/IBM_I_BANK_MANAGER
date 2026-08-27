@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:initialLayout="@layout/savings_goal_widget"
+    android:minWidth="250dp"
+    android:minHeight="96dp"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="96dp"
+    android:previewLayout="@layout/savings_goal_widget"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="86400000"
+    android:widgetCategory="home_screen" />

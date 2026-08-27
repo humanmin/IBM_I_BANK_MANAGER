@@ -7,12 +7,15 @@ environment:
   sdk: ^3.11.4
 
 dependencies:
+  crypto: ^3.0.7
   excel_plus: ^2.14.3
   firebase_auth: ^5.3.3
   firebase_core: ^3.8.0
   flutter:
     sdk: flutter
+  home_widget: ^0.9.3
   http: ^1.6.0
+  kakao_flutter_sdk_user: ^2.0.0+1
   shared_preferences: ^2.5.5
   url_launcher: ^6.3.2
   webview_flutter: ^4.10.0
@@ -21,6 +24,22 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  web:
+    generate: true
+  macos:
+    generate: true
+  windows:
+    generate: true
+  image_path: assets/images/app_icon.png
+  adaptive_icon_background: "#F3EEE4"
+  adaptive_icon_foreground: assets/images/app_icon_adaptive.png
+  adaptive_icon_foreground_inset: 0
+  remove_alpha_ios: true
 
 flutter:
   uses-material-design: true

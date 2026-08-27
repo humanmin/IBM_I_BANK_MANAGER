@@ -177,6 +177,7 @@ List<Insight> insightsFor(
     referenceDate.month,
     '구독',
   );
+
   final dailyRate = dailySavingRate(goal);
 
   if (deliveryThis > deliveryLast) {
@@ -223,4 +224,24 @@ List<Insight> insightsFor(
   }
 
   return insights.take(3).toList();
+}
+
+/// Calendar days that actually have spending, newest first, then oldest→newest
+/// for the chart. Prefers the latest spend date plus up to 6 earlier spend days
+/// so empty calendar days are skipped instead of shown as zero bars.
+List<({DateTime date, int amount})> recentSpendingDays(
+  List<MoneyTransaction> items, {
+  int dayCount = 7,
+}) {
+  final amountsByDay = <DateTime, int>{};
+  for (final item in items) {
+    if (item.amount <= 0) continue;
+    final day = DateTime(item.date.year, item.date.month, item.date.day);
+    amountsByDay[day] = (amountsByDay[day] ?? 0) + item.amount;
+  }
+  final newestFirst = amountsByDay.keys.toList()
+    ..sort((left, right) => right.compareTo(left));
+  final selected = newestFirst.take(dayCount).toList()
+    ..sort((left, right) => left.compareTo(right));
+  return [for (final day in selected) (date: day, amount: amountsByDay[day]!)];
 }

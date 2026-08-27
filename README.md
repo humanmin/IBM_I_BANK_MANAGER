@@ -12,6 +12,27 @@ flutter run
 
 연결된 기기는 `flutter devices`로 확인할 수 있습니다.
 
+### 로그인과 카카오 설정
+
+앱은 로그인/회원가입 화면에서 시작합니다. 발표용 테스트 계정은
+`test001@gmail.com`(김은찬)과 `test002@gmail.com`(김민진)이며, 비밀번호 원문은
+저장소에 기록하지 않습니다. 일반 이메일 회원가입과 로그인은 Firebase
+Authentication을 사용하므로 Firebase 콘솔의 Authentication > Sign-in method에서
+이메일/비밀번호 제공자를 활성화해야 합니다.
+
+카카오 로그인은 Kakao Developers에서 앱을 만든 뒤 Android 플랫폼에
+`com.ibm.money.ibm_money_app` 패키지와 키 해시를 등록하고, 카카오 로그인 및
+동의항목의 닉네임·프로필 사진을 활성화해야 합니다. 발급받은 Native App Key는
+Git에 올리지 않고 `android/local.properties`에 다음 한 줄로 추가합니다.
+
+```properties
+kakao.nativeAppKey=발급받은_NATIVE_APP_KEY
+```
+
+`run_phone.bat`은 이 값을 Android 리다이렉트 스킴과 Dart SDK 초기화 값에 함께
+전달합니다. 김은찬의 가져온 소비 데이터는 휴대폰에 유지되고, 김민진의 데이터는
+앱 프로세스를 완전히 종료하면 초기화됩니다.
+
 ### 실제 Android 휴대폰에서 실행
 
 1. 휴대폰의 개발자 옵션과 USB 디버깅을 켭니다.
@@ -91,7 +112,7 @@ APK는 `build\app\outputs\flutter-apk\app-release.apk`에 생성됩니다.
 ## 구현된 기능
 
 - 홈 저축 계획과 목표 진행률
-- 노랑·네이비·초록 테마 전환
+- 이메일 로그인·회원가입과 카카오 프로필 로그인
 - 알림 목록과 읽음 처리
 - 월간 소비 통계와 카테고리 필터
 - 토스뱅크 Excel·CSV 거래내역 가져오기와 로컬 저장

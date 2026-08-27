@@ -482,14 +482,18 @@ class _SavingPlanCardState extends State<SavingPlanCard> {
                   letterSpacing: -0.7,
                 ),
               ),
-              Text(
-                '저축하기',
-                style: TextStyle(
-                  color: palette.text,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.7,
-                  height: 1.4,
+              Container(
+                key: const Key('saving-action'),
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(
+                  '저축하기',
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.7,
+                    height: 1.4,
+                  ),
                 ),
               ),
             ],

@@ -1,12 +1,19 @@
-import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ibm_money_app/account_data_service.dart';
+import 'package:ibm_money_app/app_widgets.dart';
+import 'package:ibm_money_app/auth_service.dart';
+import 'package:ibm_money_app/home_screen.dart';
+import 'package:ibm_money_app/home_goal_widget_service.dart';
 import 'package:ibm_money_app/models.dart';
 import 'package:ibm_money_app/money_app.dart';
 import 'package:ibm_money_app/money_utils.dart';
 import 'package:ibm_money_app/product_search_service.dart';
+import 'package:ibm_money_app/seed_data.dart';
+import 'package:ibm_money_app/user_data_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeProductSearchGateway implements ProductSearchGateway {
@@ -25,6 +32,142 @@ class _FakeProductSearchGateway implements ProductSearchGateway {
   }
 }
 
+const _returningUser = AppUser(
+  uid: 'demo:test001@gmail.com',
+  provider: AuthProviderType.demo,
+  isFirstTime: false,
+  email: 'test001@gmail.com',
+  displayName: '김은찬',
+);
+
+const _firstTimeUser = AppUser(
+  uid: 'demo:test002@gmail.com',
+  provider: AuthProviderType.demo,
+  isFirstTime: true,
+  email: 'test002@gmail.com',
+  displayName: '김민진',
+);
+
+class _FakeAuthGateway implements AuthGateway {
+  _FakeAuthGateway({this.user});
+
+  AppUser? user;
+  final _changes = StreamController<AppUser?>.broadcast();
+
+  @override
+  Stream<AppUser?> authStateChanges() => _changes.stream;
+
+  @override
+  AppUser? get currentUser => user;
+
+  @override
+  Future<AppUser?> restoreSession() async => user;
+
+  @override
+  Future<AppUser> signInWithEmail(String email, String password) async {
+    user = email == _firstTimeUser.email ? _firstTimeUser : _returningUser;
+    _changes.add(user);
+    return user!;
+  }
+
+  @override
+  Future<AppUser> signUpWithEmail(
+    String name,
+    String email,
+    String password,
+  ) async {
+    user = AppUser(
+      uid: 'firebase:$email',
+      provider: AuthProviderType.email,
+      isFirstTime: true,
+      email: email,
+      displayName: name,
+    );
+    _changes.add(user);
+    return user!;
+  }
+
+  @override
+  Future<AppUser> signInWithKakao() async {
+    user = const AppUser(
+      uid: 'kakao:1',
+      provider: AuthProviderType.kakao,
+      isFirstTime: true,
+      displayName: '카카오 사용자',
+      photoUrl: 'https://example.com/profile.png',
+    );
+    _changes.add(user);
+    return user!;
+  }
+
+  @override
+  Future<void> signOut() async {
+    user = null;
+    _changes.add(null);
+  }
+
+  @override
+  Future<void> deleteAccount() async {
+    user = null;
+    _changes.add(null);
+  }
+
+  @override
+  Future<String?> currentIdToken() async => null;
+
+  void emitUser(AppUser? nextUser) {
+    user = nextUser;
+    _changes.add(nextUser);
+  }
+}
+
+class _DelayedAuthGateway extends _FakeAuthGateway {
+  _DelayedAuthGateway({required AppUser restoredUser})
+    : _restoredUser = restoredUser,
+      super(user: restoredUser);
+
+  final AppUser _restoredUser;
+  final Completer<AppUser?> restoreCompleter = Completer<AppUser?>();
+
+  @override
+  Future<AppUser?> restoreSession() => restoreCompleter.future;
+
+  void finishRestore() => restoreCompleter.complete(_restoredUser);
+}
+
+class _FakeGoalWidgetGateway implements GoalWidgetGateway {
+  SavingsGoal? lastGoal;
+  bool? lastHasSelectedGoal;
+  var clearCount = 0;
+
+  @override
+  Future<void> syncGoal({
+    required SavingsGoal goal,
+    required bool hasSelectedGoal,
+  }) async {
+    lastGoal = goal;
+    lastHasSelectedGoal = hasSelectedGoal;
+  }
+
+  @override
+  Future<void> clear() async {
+    clearCount += 1;
+  }
+}
+
+Widget _testApp({
+  AppUser? user = _returningUser,
+  AuthGateway? authGateway,
+  ProductSearchGateway? productSearchGateway,
+  GoalWidgetGateway? goalWidgetGateway,
+}) {
+  return MoneyApp(
+    authGateway: authGateway ?? _FakeAuthGateway(user: user),
+    productSearchGateway: productSearchGateway,
+    goalWidgetGateway: goalWidgetGateway ?? _FakeGoalWidgetGateway(),
+  );
+}
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -40,13 +183,16 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
-      MoneyApp(productSearchGateway: _FakeProductSearchGateway()),
+      _testApp(productSearchGateway: _FakeProductSearchGateway()),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('김은찬'), findsOneWidget);
     expect(find.text('AirPods'), findsOneWidget);
     expect(find.text('24일 후면 살 수 있어요!'), findsOneWidget);
+    expect(find.byKey(const Key('account-profile-menu')), findsNothing);
+    expect(find.byKey(const Key('account-label')), findsOneWidget);
+    expect(find.textContaining('현재 잔액'), findsNothing);
 
     await tester.tap(find.byKey(const Key('nav-spending')));
     await tester.pumpAndSettle();
@@ -96,105 +242,209 @@ void main() {
     expect(find.text('결제 완료'), findsOneWidget);
   });
 
-  testWidgets('account menu switches to the first-time user home', (
+  testWidgets('auth entry screens expose email and Kakao options', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(402, 874));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
+    await tester.pumpWidget(_testApp(user: null));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('auth-login-entry')), findsOneWidget);
+    expect(find.byKey(const Key('auth-signup-entry')), findsOneWidget);
+    expect(find.byKey(const Key('auth-brand-logo')), findsOneWidget);
+    expect(find.byIcon(Icons.savings_outlined), findsNothing);
+    expect(find.byKey(const Key('nav-home')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('auth-login-entry')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('email-login-option')), findsOneWidget);
+    expect(find.byKey(const Key('kakao-login-option')), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('auth-signup-entry')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('email-signup-option')), findsOneWidget);
+    expect(find.byKey(const Key('kakao-signup-option')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('email-signup-option')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('email-signup-name-field')), findsOneWidget);
+    expect(find.text('이름'), findsOneWidget);
+  });
+
+  testWidgets('restored savings goal is synchronized to the home widget', (
+    tester,
+  ) async {
+    final goalWidget = _FakeGoalWidgetGateway();
+
     await tester.pumpWidget(
-      MoneyApp(productSearchGateway: _FakeProductSearchGateway()),
+      _testApp(user: _returningUser, goalWidgetGateway: goalWidget),
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('first-time-user-home')), findsNothing);
-    expect(find.text('AirPods'), findsOneWidget);
+    expect(goalWidget.lastGoal?.name, initialGoal.name);
+    expect(goalWidget.lastHasSelectedGoal, isTrue);
+  });
 
-    await tester.tap(find.byKey(const Key('account-profile-menu')));
+  testWidgets('does not flash the login screen while restoring a session', (
+    tester,
+  ) async {
+    final auth = _DelayedAuthGateway(restoredUser: _firstTimeUser);
+    await tester.pumpWidget(_testApp(authGateway: auth));
+    await tester.pump();
+
+    auth.emitUser(null);
+    await tester.pump();
+    expect(find.byKey(const Key('auth-login-entry')), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    auth.finishRestore();
     await tester.pumpAndSettle();
-    await tester.tap(find.text('김민진').last);
+    expect(find.text('김민진'), findsOneWidget);
+    expect(find.byKey(const Key('auth-login-entry')), findsNothing);
+  });
+
+  testWidgets('restores consumer data and a selected goal after login', (
+    tester,
+  ) async {
+    final accountKey =
+        'account_data_v2_${UserDataService.keyForUser(_firstTimeUser.uid)}';
+    await AccountDataService(storageKey: accountKey).save(
+      AccountData(
+        balance: 150000,
+        transactions: [
+          MoneyTransaction(
+            id: 'saved-transaction',
+            merchant: '저장된 카페',
+            category: '카페',
+            amount: 5500,
+            date: DateTime(2026, 8, 27),
+          ),
+        ],
+        isDemo: false,
+      ),
+    );
+    await UserDataService(userId: _firstTimeUser.uid).save(
+      goal: const SavingsGoal(
+        name: '저장된 키보드',
+        imageAsset: null,
+        price: 99000,
+        saved: 10000,
+        savingAmount: 5000,
+        savingPeriod: SavingPeriod.daily,
+      ),
+      hasSelectedGoal: true,
+      wishItems: const [],
+      fixedExpenses: const [],
+    );
+
+    await tester.pumpWidget(_testApp(user: _firstTimeUser));
+    await tester.pumpAndSettle();
+
+    expect(find.text('저장된 키보드'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('nav-spending')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('first-time-spending-empty')), findsNothing);
+    expect(find.byKey(const Key('category-pie-card')), findsOneWidget);
+  });
+
+  testWidgets('four digit demo login opens the matching account', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(402, 874));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(_testApp(user: null));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('auth-login-entry')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('email-login-option')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('email-login-email-field')),
+      'test002@gmail.com',
+    );
+    await tester.enterText(
+      find.byKey(const Key('email-login-password-field')),
+      '0000',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '로그인'));
     await tester.pumpAndSettle();
 
     expect(find.text('김민진'), findsOneWidget);
     expect(find.byKey(const Key('first-time-user-home')), findsOneWidget);
-    expect(find.text('김민진님, 반가워요!'), findsOneWidget);
-    expect(find.byKey(const Key('first-goal-button')), findsOneWidget);
-    expect(find.byKey(const Key('first-import-button')), findsOneWidget);
-    expect(find.text('AirPods'), findsNothing);
-    expect(find.text('257,230원'), findsNothing);
-
-    await tester.tap(find.byKey(const Key('nav-spending')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('first-time-spending-empty')), findsOneWidget);
-    expect(find.byKey(const Key('category-pie-chart')), findsNothing);
-    expect(find.byKey(const Key('spending-bar-card')), findsNothing);
-    expect(find.byKey(const Key('recent-transactions-button')), findsNothing);
-
-    await tester.tap(find.byKey(const Key('nav-home')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('first-goal-button')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('first-time-shopping-empty')), findsOneWidget);
-    expect(find.text('AirPods'), findsNothing);
-    expect(find.text('현재 저축 목표'), findsNothing);
-    expect(find.byKey(const Key('add-wish-button')), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('shop-back-button')));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const Key('account-profile-menu')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('김은찬').last);
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('first-time-user-home')), findsNothing);
-    expect(find.text('AirPods'), findsOneWidget);
   });
 
-  testWidgets('restores the selected user and imported statistics', (
+  testWidgets('first-time account ignores previously stored account data', (
     tester,
   ) async {
-    final now = DateTime.now();
     SharedPreferences.setMockInitialValues({
-      'selected_home_user_profile_v1': 'firstTimeUser',
-      'account_data_kim_minjin_v1': jsonEncode({
-        'balance': 310000,
-        'lastUpdated': now.toIso8601String(),
-        'transactions': [
-          {
-            'id': 'saved-minjin-1',
-            'merchant': '스타벅스',
-            'category': '카페',
-            'amount': 6500,
-            'date': now.toIso8601String(),
-          },
-        ],
-      }),
+      'account_data_kim_minjin_v1': 'legacy data that must be ignored',
     });
-    expect(
-      (await SharedPreferences.getInstance()).getString(
-        'selected_home_user_profile_v1',
-      ),
-      'firstTimeUser',
-    );
     await tester.binding.setSurfaceSize(const Size(402, 874));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
-      MoneyApp(productSearchGateway: _FakeProductSearchGateway()),
+      _testApp(
+        user: _firstTimeUser,
+        productSearchGateway: _FakeProductSearchGateway(),
+      ),
     );
     await tester.pumpAndSettle();
-    await tester.pump(const Duration(milliseconds: 200));
 
     expect(find.text('김민진'), findsOneWidget);
-    expect(find.text('소비 데이터 연결 완료'), findsOneWidget);
+    expect(find.byKey(const Key('first-time-user-home')), findsOneWidget);
+    expect(find.text('소비 데이터 연결 완료'), findsNothing);
+    expect(find.byKey(const Key('account-profile-menu')), findsNothing);
     await tester.tap(find.byKey(const Key('nav-spending')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('first-time-spending-empty')), findsNothing);
-    expect(find.byKey(const Key('category-pie-card')), findsOneWidget);
-    expect(find.byKey(const Key('spending-bar-card')), findsOneWidget);
-    expect(find.byKey(const Key('category-pie-chart')), findsOneWidget);
+    expect(find.byKey(const Key('first-time-spending-empty')), findsOneWidget);
+    expect(find.byKey(const Key('category-pie-card')), findsNothing);
+  });
+
+  testWidgets('connected first-time home hides the onboarding guide', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(402, 874));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ThemeScope(
+          palette: AppPalette.fromChoice(ThemeChoice.green),
+          child: Scaffold(
+            body: HomeScreen(
+              currentUser: _firstTimeUser,
+              goal: initialGoal,
+              unreadCount: 0,
+              transactions: [
+                MoneyTransaction(
+                  id: 'connected-1',
+                  merchant: '테스트 상점',
+                  category: '쇼핑',
+                  amount: 10000,
+                  date: DateTime(2026, 8, 27),
+                ),
+              ],
+              onOpenNotifications: () {},
+              onPeriodChanged: (_) {},
+              onAmountChanged: (_) {},
+              onSaveWithToss: () {},
+              onOpenSpending: () {},
+              onOpenShop: (_) {},
+              onBuy: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('first-time-onboarding-card')), findsNothing);
+    expect(find.byKey(const Key('save-with-toss-button')), findsOneWidget);
   });
 
   testWidgets('saving action wraps as a whole and stays left aligned', (
@@ -204,7 +454,7 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
-      MoneyApp(productSearchGateway: _FakeProductSearchGateway()),
+      _testApp(productSearchGateway: _FakeProductSearchGateway()),
     );
     await tester.pumpAndSettle();
 
@@ -212,7 +462,14 @@ void main() {
     final savingSentence = find.byKey(const Key('saving-sentence-wrap'));
     final savingPeriod = find.byKey(const Key('saving-period-menu'));
     final wonText = find.text('원을');
-    final savingAction = find.text('저축하기');
+    final savingAction = find.descendant(
+      of: savingSentence,
+      matching: find.text('저축하기'),
+    );
+    expect(
+      find.ancestor(of: savingAction, matching: find.byType(InkWell)),
+      findsNothing,
+    );
     expect(
       (tester.getCenter(amountField).dy - tester.getCenter(savingAction).dy)
           .abs(),
@@ -246,7 +503,7 @@ void main() {
   testWidgets('forms and popups share the polished component theme', (
     tester,
   ) async {
-    await tester.pumpWidget(const MoneyApp());
+    await tester.pumpWidget(_testApp());
 
     final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
     final theme = materialApp.theme!;
@@ -265,7 +522,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(402, 874));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(const MoneyApp());
+    await tester.pumpWidget(_testApp());
     await tester.pumpAndSettle();
 
     final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
@@ -296,7 +553,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(402, 874));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(const MoneyApp());
+    await tester.pumpWidget(_testApp());
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('nav-spending')));
@@ -353,7 +610,7 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
-      MoneyApp(productSearchGateway: _FakeProductSearchGateway()),
+      _testApp(productSearchGateway: _FakeProductSearchGateway()),
     );
     await tester.pumpAndSettle();
 
@@ -361,9 +618,46 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('설정'), findsWidgets);
+    expect(find.text('테마'), findsNothing);
     // If AnimatedSwitcher centered the short settings page, this title
     // would sit around the middle of the 874-tall surface.
     expect(tester.getTopLeft(find.text('설정').first).dy, lessThan(48));
+  });
+
+  testWidgets('account deletion requires the current user name', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(402, 874));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final auth = _FakeAuthGateway(user: _firstTimeUser);
+
+    await tester.pumpWidget(
+      _testApp(
+        authGateway: auth,
+        productSearchGateway: _FakeProductSearchGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('nav-settings')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('delete-account-button')));
+    await tester.pumpAndSettle();
+
+    final confirm = find.byKey(const Key('confirm-delete-account-button'));
+    expect(find.byKey(const Key('delete-account-dialog')), findsOneWidget);
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+
+    await tester.enterText(
+      find.byKey(const Key('delete-account-name-field')),
+      '김민진',
+    );
+    await tester.pump();
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNotNull);
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+
+    expect(auth.user, isNull);
+    expect(find.byKey(const Key('auth-login-entry')), findsOneWidget);
   });
 
   testWidgets('spending summary keeps only the compact data card', (
@@ -372,7 +666,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(402, 874));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(const MoneyApp());
+    await tester.pumpWidget(_testApp());
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('nav-spending')));
     await tester.pumpAndSettle();

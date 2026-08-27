@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="savings_goal_widget_name">저축 목표</string>
+    <string name="savings_goal_widget_label">갖고 싶은 것</string>
+    <string name="savings_goal_widget_empty">갖고 싶은 상품을 골라보세요</string>
+    <string name="savings_goal_widget_no_goal">목표 없음</string>
+    <string name="savings_goal_widget_image_description">목표 상품 사진</string>
+</resources>

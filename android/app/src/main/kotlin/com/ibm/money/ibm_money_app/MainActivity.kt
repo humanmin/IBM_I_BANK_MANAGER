@@ -34,6 +34,7 @@ class MainActivity : FlutterActivity() {
                         openNotificationAccessSettings()
                         result.success(null)
                     }
+                    "openTossApp" -> result.success(openTossApp())
                     "getCapturedTransactions" ->
                         result.success(capturedTransactions())
                     else -> result.notImplemented()
@@ -154,6 +155,17 @@ class MainActivity : FlutterActivity() {
             startActivity(intent)
         } else {
             startActivity(Intent(Settings.ACTION_SETTINGS))
+        }
+    }
+
+    private fun openTossApp(): Boolean {
+        val intent = packageManager.getLaunchIntentForPackage("viva.republica.toss")
+            ?: return false
+        return try {
+            startActivity(intent)
+            true
+        } catch (_: Exception) {
+            false
         }
     }
 

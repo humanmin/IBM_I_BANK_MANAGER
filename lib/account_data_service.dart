@@ -48,8 +48,11 @@ class _NativeTransactions {
 }
 
 class AccountDataService {
-  AccountDataService({String storageKey = defaultStorageKey})
-    : _storageKey = storageKey;
+  AccountDataService({
+    String storageKey = defaultStorageKey,
+    bool persist = true,
+  }) : _storageKey = storageKey,
+       _persist = persist;
 
   static const _channel = MethodChannel(
     'com.ibm.money.ibm_money_app/account_data',
@@ -57,8 +60,10 @@ class AccountDataService {
   static const defaultStorageKey = 'account_data_v1';
 
   final String _storageKey;
+  final bool _persist;
 
   Future<AccountData?> loadSaved() async {
+    if (!_persist) return null;
     try {
       final preferences = await SharedPreferences.getInstance();
       final raw = preferences.getString(_storageKey);
@@ -96,6 +101,7 @@ class AccountDataService {
   }
 
   Future<void> save(AccountData data) async {
+    if (!_persist) return;
     final json = <String, dynamic>{
       'balance': data.balance,
       'lastUpdated': data.lastUpdated?.toIso8601String(),
@@ -103,6 +109,12 @@ class AccountDataService {
     };
     final preferences = await SharedPreferences.getInstance();
     await preferences.setString(_storageKey, jsonEncode(json));
+  }
+
+  Future<void> clearSaved() async {
+    if (!_persist) return;
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_storageKey);
   }
 
   Future<({AccountData data, int imported, int skipped})?> importDocument(
@@ -203,7 +215,7 @@ class AccountDataService {
       if (raw == null) return null;
       final bytes = raw['bytes'];
       if (bytes is! Uint8List || bytes.isEmpty) {
-        throw const AccountImportException('선택한 파일을 읽을 수 없어요.');
+        throw const AccountImportException('선택한 파일을 읽을ㅌ 수 없어요.');
       }
       return _PickedDocument(
         name: raw['name']?.toString() ?? '거래내역',
