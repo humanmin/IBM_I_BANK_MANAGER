@@ -1,0 +1,71 @@
+# GATE DaemonSet — 노드마다 1개씩 배포되어 그 노드의 모든 파드(특히
+# product-search-server)의 아웃바운드 연결을 감시합니다.
+#
+# 필수 전제:
+#   - 노드가 tracefs/debugfs를 노출해야 함 (표준 OpenShift 노드는 기본 지원)
+#   - SecurityContextConstraints가 privileged 또는 최소 CAP_SYS_ADMIN+CAP_BPF 허용 필요
+#     (개발 단계에서는 privileged SCC로 시작 → 운영 전환 시 최소 권한으로 축소 권장)
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: gate-agent
+  labels:
+    app: gate
+spec:
+  selector:
+    matchLabels:
+      app: gate
+  template:
+    metadata:
+      labels:
+        app: gate
+    spec:
+      serviceAccountName: gate-agent
+      hostPID: true # 감시 대상 파드의 PID/프로세스명을 정확히 식별하기 위함
+      containers:
+        - name: gate-agent
+          image: image-registry.openshift-image-registry.svc:5000/CHANGE_ME_NAMESPACE/gate-agent:latest
+          securityContext:
+            privileged: true # TODO: 검증 후 capabilities: [SYS_ADMIN, BPF, PERFMON]로 축소
+          env:
+            - name: GATE_ALLOWLIST
+              valueFrom:
+                configMapKeyRef:
+                  name: gate-config
+                  key: allowlist
+            - name: GATE_RESOLVE_INTERVAL_SEC
+              value: "300"
+          volumeMounts:
+            - name: sys-kernel-debug
+              mountPath: /sys/kernel/debug
+            - name: sys-fs-bpf
+              mountPath: /sys/fs/bpf
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: sys-kernel-debug
+          hostPath:
+            path: /sys/kernel/debug
+        - name: sys-fs-bpf
+          hostPath:
+            path: /sys/fs/bpf
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gate-config
+data:
+  # server.mjs가 실제로 통신하는 도메인만 나열 — 여기 없는 목적지로 나가면 이상 이벤트
+  allowlist: >-
+    firebaseio.com,googleapis.com,identitytoolkit.googleapis.com,
+    firestore.googleapis.com,us-south.ml.cloud.ibm.com,serpapi.com
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gate-agent
