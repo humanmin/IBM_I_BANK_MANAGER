@@ -6,7 +6,7 @@ import 'models.dart';
 import 'money_utils.dart';
 
 /// Compact month summary sent to watsonx. We do **not** send every
-/// transaction (merchant names, dates, raw rows) — only totals the model
+/// transaction (merchant names, dates, raw rows) — only the totals the model
 /// needs to write the 통계 "이번 달 한마디" cards.
 class SpendingInsightRequest {
   const SpendingInsightRequest({
@@ -21,9 +21,7 @@ class SpendingInsightRequest {
     required this.goalPrice,
     required this.daysToGoal,
     required this.dailySavingAmount,
-    required this.isDemo,
     this.topCategory,
-    this.lastUpdated,
   });
 
   final int year;
@@ -38,30 +36,6 @@ class SpendingInsightRequest {
   final int goalPrice;
   final int daysToGoal;
   final int dailySavingAmount;
-  final bool isDemo;
-  final DateTime? lastUpdated;
-
-  /// Same fingerprint => same payload. Used so we do not call AI again
-  /// until the month, totals, goal, or imported file actually change.
-  String get fingerprint {
-    final categoryPart = categories
-        .map((item) => '${item.name}:${item.amount}')
-        .join(',');
-    return [
-      year,
-      month,
-      thisMonthSpent,
-      lastMonthSpent,
-      count,
-      lastUpdated?.millisecondsSinceEpoch ?? 0,
-      goalName,
-      goalPrice,
-      daysToGoal,
-      dailySavingAmount,
-      isDemo,
-      categoryPart,
-    ].join('|');
-  }
 
   Map<String, dynamic> toJson() {
     return {
@@ -89,8 +63,6 @@ class SpendingInsightRequest {
 SpendingInsightRequest buildSpendingInsightRequest({
   required List<MoneyTransaction> transactions,
   required SavingsGoal goal,
-  required bool isDemo,
-  DateTime? lastUpdated,
   DateTime? asOf,
 }) {
   final now = asOf ?? DateTime.now();
@@ -127,31 +99,12 @@ SpendingInsightRequest buildSpendingInsightRequest({
     goalPrice: goal.price,
     daysToGoal: daysToGoal(goal),
     dailySavingAmount: goal.savingAmount,
-    isDemo: isDemo,
-    lastUpdated: lastUpdated,
   );
 }
 
-/// Decides **when** the app should call watsonx for 통계 feedback.
-///
-/// Call it only when all of these are true:
-/// 1. Data is real (imported file / 알림 동기화), not the built-in demo seed.
-/// 2. The 통계 tab is actually on screen — opening Home should not spend AI quota.
-/// 3. The spending snapshot changed since the last request (fingerprint).
-///
-/// Rebuilds, scrolling, and theme changes do not change the fingerprint,
-/// so they never trigger a new request.
-bool shouldRequestSpendingInsights({
-  required bool isDemoData,
-  required bool isSpendingTabVisible,
-  required String fingerprint,
-  required String? lastRequestedFingerprint,
-}) {
-  if (isDemoData) return false;
-  if (!isSpendingTabVisible) return false;
-  if (fingerprint == lastRequestedFingerprint) return false;
-  return true;
-}
+/// The AI runs only when the user taps the button, so the single rule is:
+/// don't start a second request while one is already running.
+bool shouldRequestSpendingInsights({required bool isLoading}) => !isLoading;
 
 abstract interface class SpendingInsightGateway {
   Future<List<Insight>> fetch(SpendingInsightRequest request);
@@ -159,6 +112,7 @@ abstract interface class SpendingInsightGateway {
 
 class SpendingInsightException implements Exception {
   const SpendingInsightException(this.message);
+
   final String message;
 
   @override
@@ -177,27 +131,9 @@ class SpendingInsightService implements SpendingInsightGateway {
 
   final http.Client _client;
   final String _baseUrl;
-  Future<List<Insight>>? _inFlight;
-  String? _inFlightFingerprint;
 
   @override
-  Future<List<Insight>> fetch(SpendingInsightRequest request) {
-    if (_inFlight != null && _inFlightFingerprint == request.fingerprint) {
-      return _inFlight!;
-    }
-
-    final future = _fetch(request);
-    _inFlight = future;
-    _inFlightFingerprint = request.fingerprint;
-    return future.whenComplete(() {
-      if (_inFlightFingerprint == request.fingerprint) {
-        _inFlight = null;
-        _inFlightFingerprint = null;
-      }
-    });
-  }
-
-  Future<List<Insight>> _fetch(SpendingInsightRequest request) async {
+  Future<List<Insight>> fetch(SpendingInsightRequest request) async {
     final root = _baseUrl.replaceAll(RegExp(r'/+$'), '');
     final uri = Uri.parse('$root/api/insights');
 
@@ -211,7 +147,7 @@ class SpendingInsightService implements SpendingInsightGateway {
             },
             body: jsonEncode(request.toJson()),
           )
-          .timeout(const Duration(seconds: 25));
+          .timeout(const Duration(seconds: 30));
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode != 200) {
         final message = body is Map<String, dynamic>

@@ -89,29 +89,31 @@ class NotificationsScreen extends StatelessWidget {
   }
 }
 
+/// AI-driven "이번 달 한마디". Cards come only from watsonx after the user
+/// taps the button; there is no local dummy fallback.
 class _InsightsSection extends StatelessWidget {
   const _InsightsSection({
     required this.goal,
-    required this.transactions,
     required this.onOpenCategory,
     required this.onSeeGoal,
-    this.remoteInsights,
-    this.loading = false,
+    required this.onRequestInsights,
+    required this.insights,
+    required this.loading,
+    required this.error,
   });
 
   final SavingsGoal goal;
-  final List<MoneyTransaction> transactions;
   final ValueChanged<String> onOpenCategory;
   final VoidCallback onSeeGoal;
-  final List<Insight>? remoteInsights;
+  final VoidCallback onRequestInsights;
+  final List<Insight>? insights;
   final bool loading;
+  final String? error;
 
   @override
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
-    final insights = remoteInsights != null && remoteInsights!.isNotEmpty
-        ? remoteInsights!
-        : insightsFor(transactions, goal);
+    final hasResult = insights != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -126,19 +128,30 @@ class _InsightsSection extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          loading ? '이번 달 소비를 살펴보는 중이에요' : '소비 습관에서 눈에 띄는 점을 짚어줘요',
+          loading
+              ? 'AI가 이번 달 소비를 살펴보는 중이에요'
+              : 'AI가 소비 습관에서 눈에 띄는 점을 짚어줘요',
           style: TextStyle(color: palette.textMuted, fontSize: 12),
         ),
         const SizedBox(height: 12),
-        if (insights.isEmpty)
+        if (loading)
+          const _InsightGeneratingSkeleton()
+        else if (error != null)
+          _InsightCard(
+            title: '피드백을 받지 못했어요',
+            body: error!,
+            actionLabel: '목표 다시 보기',
+            onAction: onSeeGoal,
+          )
+        else if (hasResult && insights!.isEmpty)
           _InsightCard(
             title: '이번 달은 무난해요',
             body: '크게 늘어난 소비가 없어요. ${goal.name}까지 남은 날을 한번 확인해 볼까요?',
             actionLabel: '목표 다시 보기',
             onAction: onSeeGoal,
           )
-        else
-          ...insights.map(
+        else if (hasResult)
+          ...insights!.map(
             (insight) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: _InsightCard(
@@ -150,7 +163,57 @@ class _InsightsSection extends StatelessWidget {
                     : () => onOpenCategory(insight.actionCategory),
               ),
             ),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: mutedBackground,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              '버튼을 누르면 이번 달 소비 요약을 AI에게 보내서 맞춤 피드백을 받아요.',
+              style: TextStyle(
+                color: palette.textSoft,
+                fontSize: 14,
+                height: 1.5,
+              ),
+            ),
           ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            key: const Key('request-spending-insights-button'),
+            onPressed: loading ? null : onRequestInsights,
+            icon: loading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.auto_awesome, size: 18),
+            label: Text(
+              loading
+                  ? 'AI가 생각하는 중…'
+                  : hasResult
+                  ? 'AI 피드백 다시 받기'
+                  : 'AI에게 물어보기',
+            ),
+            style: FilledButton.styleFrom(
+              backgroundColor: palette.accent,
+              foregroundColor: palette.text,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              textStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+        ),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(16),
@@ -169,6 +232,102 @@ class _InsightsSection extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Placeholder cards that pulse while watsonx writes the real text.
+class _InsightGeneratingSkeleton extends StatefulWidget {
+  const _InsightGeneratingSkeleton();
+
+  @override
+  State<_InsightGeneratingSkeleton> createState() =>
+      _InsightGeneratingSkeletonState();
+}
+
+class _InsightGeneratingSkeletonState extends State<_InsightGeneratingSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      key: const Key('spending-insights-skeleton'),
+      opacity: Tween<double>(begin: 0.4, end: 1).animate(_pulse),
+      child: const Column(
+        children: [
+          _InsightSkeletonCard(),
+          SizedBox(height: 10),
+          _InsightSkeletonCard(),
+        ],
+      ),
+    );
+  }
+}
+
+class _InsightSkeletonCard extends StatelessWidget {
+  const _InsightSkeletonCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: mutedBackground,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SkeletonBar(widthFactor: 0.42, height: 16),
+          SizedBox(height: 12),
+          _SkeletonBar(widthFactor: 1, height: 12),
+          SizedBox(height: 8),
+          _SkeletonBar(widthFactor: 0.92, height: 12),
+          SizedBox(height: 8),
+          _SkeletonBar(widthFactor: 0.7, height: 12),
+          SizedBox(height: 14),
+          _SkeletonBar(widthFactor: 0.36, height: 12),
+        ],
+      ),
+    );
+  }
+}
+
+class _SkeletonBar extends StatelessWidget {
+  const _SkeletonBar({required this.widthFactor, required this.height});
+
+  final double widthFactor;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return FractionallySizedBox(
+      widthFactor: widthFactor,
+      alignment: Alignment.centerLeft,
+      child: Container(
+        height: height,
+        decoration: BoxDecoration(
+          color: const Color(0xFFE0E0E0),
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
     );
   }
 }
@@ -288,8 +447,10 @@ class SpendingScreen extends StatefulWidget {
     required this.onAddFixedExpense,
     required this.onUpdateFixedExpense,
     required this.onDeleteFixedExpense,
+    required this.onRequestInsights,
     this.remoteInsights,
     this.insightsLoading = false,
+    this.insightError,
     this.showEmptyState = false,
     super.key,
   });
@@ -308,8 +469,10 @@ class SpendingScreen extends StatefulWidget {
   final ValueChanged<FixedExpense> onAddFixedExpense;
   final ValueChanged<FixedExpense> onUpdateFixedExpense;
   final ValueChanged<FixedExpense> onDeleteFixedExpense;
+  final VoidCallback onRequestInsights;
   final List<Insight>? remoteInsights;
   final bool insightsLoading;
+  final String? insightError;
   final bool showEmptyState;
 
   @override
@@ -491,11 +654,12 @@ class _SpendingScreenState extends State<SpendingScreen> {
         const SizedBox(height: 28),
         _InsightsSection(
           goal: widget.goal,
-          transactions: widget.transactions,
           onOpenCategory: widget.onOpenHistory,
           onSeeGoal: widget.onSeeGoal,
-          remoteInsights: widget.remoteInsights,
+          onRequestInsights: widget.onRequestInsights,
+          insights: widget.remoteInsights,
           loading: widget.insightsLoading,
+          error: widget.insightError,
         ),
       ],
     );

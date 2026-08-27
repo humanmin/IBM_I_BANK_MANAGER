@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  normalizeInsights,
   normalizeIntent,
   normalizeShoppingResults,
+  resolveWatsonxChatTarget,
   shouldInterpretQuery,
 } from './server.mjs';
 
@@ -62,4 +64,57 @@ test('maps live shopping fields and filters invalid or over-budget items', () =>
       source: '테스트몰',
     },
   ]);
+});
+
+test('search and insights share the same watsonx model/project', () => {
+  const env = {
+    WATSONX_PROJECT_ID: 'project-general',
+    WATSONX_MODEL_ID: 'ibm/granite-4-h-small',
+  };
+
+  assert.deepEqual(resolveWatsonxChatTarget(env), {
+    modelId: 'ibm/granite-4-h-small',
+    projectId: 'project-general',
+  });
+});
+
+test('watsonx target is empty when model id is not configured', () => {
+  const target = resolveWatsonxChatTarget({
+    WATSONX_PROJECT_ID: 'project-general',
+  });
+  assert.deepEqual(target, { modelId: '', projectId: 'project-general' });
+});
+
+test('keeps at most three valid insight cards', () => {
+  const insights = normalizeInsights({
+    insights: [
+      {
+        id: 'delivery',
+        title: '배달이 늘었어요',
+        body: '한 끼만 줄여 보세요.',
+        actionLabel: '배달 내역 확인하기',
+        actionCategory: '배달',
+      },
+      { title: '제목만 있고 본문이 없어요' },
+      {
+        title: '카페를 줄여 보세요',
+        body: '일주일에 한 잔만 줄여도 목표가 당겨져요.',
+        actionCategory: '카페',
+      },
+      {
+        title: '구독 점검',
+        body: '안 쓰는 구독이 있는지 확인해 보세요.',
+      },
+      {
+        title: '네 번째 카드',
+        body: '세 개까지만 보여주므로 무시되어야 해요.',
+      },
+    ],
+  });
+
+  assert.equal(insights.length, 3);
+  assert.equal(insights[0].id, 'delivery');
+  assert.equal(insights[1].actionLabel, '카페 내역 확인하기');
+  assert.equal(insights[2].actionLabel, '목표 다시 보기');
+  assert.equal(insights[2].actionCategory, '');
 });
