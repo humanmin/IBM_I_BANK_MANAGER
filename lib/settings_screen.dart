@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_widgets.dart';
 import 'models.dart';
 
-/// 설정 탭. 계정(로그인/로그아웃)과 테마 선택을 모아둔 화면.
+/// 설정 탭. 현재 로그인 계정과 로그아웃 동작을 모아둔 화면.
 ///
 /// 이전에는 홈 화면 아바타를 눌러 Navigator.push로 로그인 화면을 띄우는
 /// 방식이었는데, 이 앱의 다른 모든 화면은 하단 탭 전환(_activeTab 상태 변경)
@@ -13,26 +13,12 @@ import 'models.dart';
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
     required this.currentUser,
-    required this.themeChoice,
-    required this.onThemeChanged,
     required this.onOpenAccount,
     super.key,
   });
 
   final AppUser? currentUser;
-  final ThemeChoice themeChoice;
-  final ValueChanged<ThemeChoice> onThemeChanged;
   final VoidCallback onOpenAccount;
-
-  static const _themeLabels = <ThemeChoice, String>{
-    ThemeChoice.navy: '네이비',
-    ThemeChoice.green: '그린',
-  };
-
-  static const _themeColors = <ThemeChoice, Color>{
-    ThemeChoice.navy: Color(0xFF7D8FAD),
-    ThemeChoice.green: Color(0xFF9FC4A6),
-  };
 
   @override
   Widget build(BuildContext context) {
@@ -80,9 +66,7 @@ class SettingsScreen extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    user == null
-                        ? Icons.login_rounded
-                        : Icons.person_rounded,
+                    user == null ? Icons.login_rounded : Icons.person_rounded,
                     color: palette.text,
                     size: 20,
                   ),
@@ -93,7 +77,7 @@ class SettingsScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        user == null ? '로그인 / 회원가입' : (user.email ?? user.uid),
+                        user?.displayName ?? user?.email ?? '로그인 / 회원가입',
                         style: TextStyle(
                           color: palette.text,
                           fontSize: 14,
@@ -105,97 +89,13 @@ class SettingsScreen extends StatelessWidget {
                         user == null
                             ? '계좌 연동, 이벤트 참여를 위해 로그인해 주세요.'
                             : '탭해서 계정 정보 보기 · 로그아웃',
-                        style: TextStyle(
-                          color: palette.textSoft,
-                          fontSize: 12,
-                        ),
+                        style: TextStyle(color: palette.textSoft, fontSize: 12),
                       ),
                     ],
                   ),
                 ),
-                Icon(
-                  Icons.chevron_right,
-                  color: palette.textSoft,
-                  size: 20,
-                ),
+                Icon(Icons.chevron_right, color: palette.textSoft, size: 20),
               ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // ── 테마 섹션 ──────────────────────────────────────────
-          Text(
-            '테마',
-            style: TextStyle(
-              color: palette.textSoft,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          SoftCard(
-            color: palette.surface,
-            radius: 16,
-            child: Column(
-              children: ThemeChoice.values.map((choice) {
-                final selected = choice == themeChoice;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () => onThemeChanged(choice),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 4,
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 22,
-                            height: 22,
-                            decoration: BoxDecoration(
-                              color: _themeColors[choice],
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: palette.surface,
-                                width: 2,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(
-                                    alpha: selected ? 0.32 : 0.12,
-                                  ),
-                                  spreadRadius: selected ? 1.5 : 0.5,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              _themeLabels[choice]!,
-                              style: TextStyle(
-                                color: palette.text,
-                                fontSize: 14,
-                                fontWeight: selected
-                                    ? FontWeight.w800
-                                    : FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          if (selected)
-                            Icon(
-                              Icons.check_circle_rounded,
-                              color: palette.accent,
-                              size: 20,
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
             ),
           ),
         ],
