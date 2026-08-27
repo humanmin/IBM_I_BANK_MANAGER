@@ -13,6 +13,7 @@ import 'package:ibm_money_app/money_app.dart';
 import 'package:ibm_money_app/money_utils.dart';
 import 'package:ibm_money_app/product_search_service.dart';
 import 'package:ibm_money_app/seed_data.dart';
+import 'package:ibm_money_app/spending_insight_service.dart';
 import 'package:ibm_money_app/user_data_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -160,12 +161,43 @@ Widget _testApp({
   AuthGateway? authGateway,
   ProductSearchGateway? productSearchGateway,
   GoalWidgetGateway? goalWidgetGateway,
+  SpendingInsightGateway? spendingInsightGateway,
 }) {
   return MoneyApp(
     authGateway: authGateway ?? _FakeAuthGateway(user: user),
     productSearchGateway: productSearchGateway,
     goalWidgetGateway: goalWidgetGateway ?? _FakeGoalWidgetGateway(),
+    spendingInsightGateway: spendingInsightGateway,
   );
+}
+
+class _FakeSpendingInsightGateway implements SpendingInsightGateway {
+  SpendingInsightRequest? lastRequest;
+
+  @override
+  Future<List<Insight>> fetch(SpendingInsightRequest request) async {
+    lastRequest = request;
+    return const [
+      Insight(
+        id: 'ai-delivery',
+        title: 'AI: 배달을 조금 줄여 볼까요?',
+        body: '이번 달 배달 지출이 컸어요. 한 끼만 줄여도 목표가 빨라져요.',
+        actionLabel: '배달 내역 확인하기',
+        actionCategory: '배달',
+      ),
+    ];
+  }
+}
+
+class _PendingSpendingInsightGateway implements SpendingInsightGateway {
+  _PendingSpendingInsightGateway(this._completer);
+
+  final Completer<List<Insight>> _completer;
+
+  @override
+  Future<List<Insight>> fetch(SpendingInsightRequest request) {
+    return _completer.future;
+  }
 }
 
 void main() {
@@ -182,8 +214,12 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(402, 874));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
+    final insightGateway = _FakeSpendingInsightGateway();
     await tester.pumpWidget(
-      _testApp(productSearchGateway: _FakeProductSearchGateway()),
+      _testApp(
+        productSearchGateway: _FakeProductSearchGateway(),
+        spendingInsightGateway: insightGateway,
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -197,7 +233,7 @@ void main() {
     await tester.tap(find.byKey(const Key('nav-spending')));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.text('이번 달 한마디'),
+      find.byKey(const Key('request-spending-insights-button')),
       350,
       scrollable: find.descendant(
         of: find.byKey(const PageStorageKey('spending-scroll')),
@@ -205,7 +241,15 @@ void main() {
       ),
     );
     expect(find.text('이번 달 한마디'), findsOneWidget);
-    expect(find.text('배달이 조금 늘었어요'), findsOneWidget);
+    // Dummy rule-based cards are gone; AI runs only after a tap.
+    expect(find.text('배달이 조금 늘었어요'), findsNothing);
+    expect(insightGateway.lastRequest, isNull);
+
+    await tester.tap(find.byKey(const Key('request-spending-insights-button')));
+    await tester.pumpAndSettle();
+    expect(insightGateway.lastRequest, isNotNull);
+    expect(find.text('AI: 배달을 조금 줄여 볼까요?'), findsOneWidget);
+    expect(find.text('AI 피드백 다시 받기'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('nav-home')));
     await tester.pumpAndSettle();
@@ -240,6 +284,53 @@ void main() {
     await tester.tap(find.text('29,900원 결제하기'));
     await tester.pumpAndSettle();
     expect(find.text('결제 완료'), findsOneWidget);
+  });
+
+  testWidgets('shows text skeleton while spending feedback is generating', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(402, 874));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final pending = Completer<List<Insight>>();
+    await tester.pumpWidget(
+      _testApp(
+        productSearchGateway: _FakeProductSearchGateway(),
+        spendingInsightGateway: _PendingSpendingInsightGateway(pending),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('nav-spending')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('request-spending-insights-button')),
+      350,
+      scrollable: find.descendant(
+        of: find.byKey(const PageStorageKey('spending-scroll')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('request-spending-insights-button')));
+    await tester.pump();
+
+    expect(find.byKey(const Key('spending-insights-skeleton')), findsOneWidget);
+    expect(find.text('AI가 이번 달 소비를 살펴보는 중이에요'), findsOneWidget);
+
+    pending.complete(const [
+      Insight(
+        id: 'ai-delivery',
+        title: 'AI: 배달을 조금 줄여 볼까요?',
+        body: '이번 달 배달 지출이 컸어요. 한 끼만 줄여도 목표가 빨라져요.',
+        actionLabel: '배달 내역 확인하기',
+        actionCategory: '배달',
+      ),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('spending-insights-skeleton')), findsNothing);
+    expect(find.text('AI: 배달을 조금 줄여 볼까요?'), findsOneWidget);
   });
 
   testWidgets('auth entry screens expose email and Kakao options', (

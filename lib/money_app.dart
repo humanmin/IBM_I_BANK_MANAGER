@@ -237,15 +237,18 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   late final bool _ownsProductSearchGateway;
   late final SpendingInsightGateway _spendingInsightGateway;
   late final bool _ownsSpendingInsightGateway;
+  // AI feedback state for the 통계 tab. Filled only when the user taps the
+  // button; never pre-filled with local dummy cards.
+  List<Insight>? _remoteInsights;
+  bool _insightsLoading = false;
+  String? _insightError;
+  int _insightRequestId = 0;
   late final AuthGateway _authGateway;
   late final GoalWidgetGateway _goalWidgetGateway;
   late final EventGateway _eventGateway;
   AppUser? _currentUser;
   StreamSubscription<AppUser?>? _authSubscription;
   bool _authReady = false;
-  String? _insightFingerprint;
-  List<Insight>? _remoteInsights;
-  bool _insightsLoading = false;
 
   @override
   void initState() {
@@ -360,8 +363,10 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     _fixedExpenses
       ..clear()
       ..addAll(storedUserData?.fixedExpenses ?? const []);
-    _insightFingerprint = null;
+    _insightRequestId++;
     _remoteInsights = null;
+    _insightsLoading = false;
+    _insightError = null;
     unawaited(
       _queueGoalWidgetSync(
         goal: _goal,
@@ -391,8 +396,10 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     _firstTimeHasSelectedGoal = false;
     _fixedExpenses.clear();
     _wishItems.clear();
-    _insightFingerprint = null;
+    _insightRequestId++;
     _remoteInsights = null;
+    _insightsLoading = false;
+    _insightError = null;
   }
 
   Future<void> _refreshNotificationAccess({
@@ -424,7 +431,6 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
       }
       if (mounted) {
         setState(() => _setAccountDataFor(firstTimeUser, result.data));
-        _refreshSpendingInsights();
       }
       final skippedText = result.skipped == 0
           ? ''
@@ -564,7 +570,6 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
       final result = await service.syncNotifications(currentData);
       if (mounted && !identical(result.data, currentData)) {
         setState(() => _setAccountDataFor(firstTimeUser, result.data));
-        _refreshSpendingInsights();
       }
       return AccountActionResult(
         succeeded: true,
@@ -653,7 +658,6 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
       _activeTab = tab;
       if (tab == AppTab.history) _historyFilter = null;
     });
-    _refreshSpendingInsights();
   }
 
   void _openNotifications() {
@@ -661,6 +665,45 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
       _unreadCount = 0;
       _activeTab = AppTab.notifications;
     });
+  }
+
+  /// Runs only when the user taps the AI button on the 통계 tab.
+  /// Opening the tab never calls the model, so quota is spent on purpose.
+  Future<void> _requestSpendingInsights() async {
+    if (!shouldRequestSpendingInsights(isLoading: _insightsLoading)) return;
+
+    final request = buildSpendingInsightRequest(
+      transactions: _activeAccountData.transactions,
+      goal: _goal,
+    );
+    // If the user switches profiles while we wait, this id no longer matches
+    // and we throw the late response away instead of showing stale cards.
+    final requestId = ++_insightRequestId;
+    setState(() {
+      _insightsLoading = true;
+      _insightError = null;
+    });
+
+    try {
+      final insights = await _spendingInsightGateway.fetch(request);
+      if (!mounted || requestId != _insightRequestId) return;
+      setState(() {
+        _remoteInsights = insights;
+        _insightsLoading = false;
+      });
+    } on SpendingInsightException catch (error) {
+      if (!mounted || requestId != _insightRequestId) return;
+      setState(() {
+        _insightsLoading = false;
+        _insightError = error.message;
+      });
+    } catch (_) {
+      if (!mounted || requestId != _insightRequestId) return;
+      setState(() {
+        _insightsLoading = false;
+        _insightError = 'AI 피드백을 받지 못했어요. 잠시 후 다시 시도해 주세요.';
+      });
+    }
   }
 
   Future<void> _openAccount() async {
@@ -696,43 +739,6 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
 
   void _openSpending() {
     _changeTab(AppTab.spending);
-  }
-
-  /// Ask watsonx for 통계 feedback only when the policy says so.
-  /// Local `insightsFor` cards stay on screen until a real response arrives.
-  Future<void> _refreshSpendingInsights() async {
-    final accountData = _activeAccountData;
-    final request = buildSpendingInsightRequest(
-      transactions: accountData.transactions,
-      goal: _goal,
-      isDemo: accountData.isDemo,
-      lastUpdated: accountData.lastUpdated,
-    );
-    if (!shouldRequestSpendingInsights(
-      isDemoData: accountData.isDemo,
-      isSpendingTabVisible: _activeTab == AppTab.spending,
-      fingerprint: request.fingerprint,
-      lastRequestedFingerprint: _insightFingerprint,
-    )) {
-      return;
-    }
-
-    _insightFingerprint = request.fingerprint;
-    setState(() => _insightsLoading = true);
-
-    try {
-      final insights = await _spendingInsightGateway.fetch(request);
-      if (!mounted) return;
-      if (_insightFingerprint != request.fingerprint) return;
-      setState(() {
-        _remoteInsights = insights.isEmpty ? null : insights;
-        _insightsLoading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      if (_insightFingerprint != request.fingerprint) return;
-      setState(() => _insightsLoading = false);
-    }
   }
 
   void _openHistory([String? category]) {
@@ -958,6 +964,8 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
         onDeleteFixedExpense: _deleteFixedExpense,
         remoteInsights: _remoteInsights,
         insightsLoading: _insightsLoading,
+        insightError: _insightError,
+        onRequestInsights: _requestSpendingInsights,
         showEmptyState:
             _isFirstTimeUser &&
             activeAccountData.transactions.isEmpty &&

@@ -21,6 +21,14 @@ function requireSetting(name) {
 
 class ConfigurationError extends Error {}
 
+// Search and 통계 feedback share one watsonx model/project from .env.
+export function resolveWatsonxChatTarget(env = process.env) {
+  return {
+    modelId: env.WATSONX_MODEL_ID?.trim() || '',
+    projectId: env.WATSONX_PROJECT_ID?.trim() || '',
+  };
+}
+
 function sendJson(response, statusCode, data) {
   response.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -75,7 +83,21 @@ export function shouldInterpretQuery(query) {
   );
 }
 
-async function interpretQuery(query) {
+// Send a system prompt we wrote in code plus a user message.
+// Always uses WATSONX_MODEL_ID / WATSONX_PROJECT_ID. Returns parsed JSON.
+async function callAiWithPrompt({
+  system,
+  user,
+  maxTokens,
+  temperature = 0,
+}) {
+  const target = resolveWatsonxChatTarget();
+  if (!target.modelId || !target.projectId) {
+    throw new ConfigurationError(
+      'WATSONX_MODEL_ID / WATSONX_PROJECT_ID 설정이 필요합니다.',
+    );
+  }
+
   const token = await getIamToken();
   const baseUrl = requireSetting('WATSONX_URL').replace(/\/+$/, '');
   const version = process.env.WATSONX_API_VERSION || '2023-10-25';
@@ -89,20 +111,17 @@ async function interpretQuery(query) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model_id: requireSetting('WATSONX_MODEL_ID'),
-        project_id: requireSetting('WATSONX_PROJECT_ID'),
+        model_id: target.modelId,
+        project_id: target.projectId,
         response_format: { type: 'json_object' },
-        temperature: 0,
-        max_tokens: 120,
+        temperature,
+        max_tokens: maxTokens,
         messages: [
-          {
-            role: 'system',
-            content:
-              '당신은 한국 온라인 쇼핑 검색어 분석기입니다. 실제 상품이나 가격을 만들지 마세요. 사용자 문장에서 핵심 상품 검색어와 명시된 최대 예산만 추출하고 JSON 객체 {"searchQuery": string, "maxPrice": number|null}만 반환하세요.',
-          },
-          { role: 'user', content: query },
+          { role: 'system', content: system },
+          { role: 'user', content: user },
         ],
       }),
+      signal: AbortSignal.timeout(25_000),
     },
   );
   const data = await response.json();
@@ -113,7 +132,23 @@ async function interpretQuery(query) {
   if (typeof content !== 'string') {
     throw new Error('watsonx AI 응답을 읽을 수 없습니다.');
   }
-  return normalizeIntent(JSON.parse(content), query);
+  try {
+    return JSON.parse(content);
+  } catch {
+    throw new Error('watsonx AI 응답을 읽을 수 없습니다.');
+  }
+}
+
+const searchSystemPrompt =
+  '당신은 한국 온라인 쇼핑 검색어 분석기입니다. 실제 상품이나 가격을 만들지 마세요. 사용자 문장에서 핵심 상품 검색어와 명시된 최대 예산만 추출하고 JSON 객체 {"searchQuery": string, "maxPrice": number|null}만 반환하세요.';
+
+async function interpretQuery(query) {
+  const parsed = await callAiWithPrompt({
+    system: searchSystemPrompt,
+    user: query,
+    maxTokens: 120,
+  });
+  return normalizeIntent(parsed, query);
 }
 
 export function normalizeShoppingResults(data, maxPrice = null) {
@@ -156,6 +191,70 @@ async function searchShopping(intent) {
     throw new Error(data?.error || '상품 검색 제공자 요청에 실패했습니다.');
   }
   return normalizeShoppingResults(data, intent.maxPrice);
+}
+
+// Keep only well-formed cards and cap at 3 so the UI stays small.
+export function normalizeInsights(value) {
+  const rawInsights = Array.isArray(value?.insights) ? value.insights : [];
+  const insights = [];
+  for (const [index, item] of rawInsights.entries()) {
+    const title = typeof item?.title === 'string' ? item.title.trim() : '';
+    const body = typeof item?.body === 'string' ? item.body.trim() : '';
+    if (!title || !body) continue;
+    const actionCategory =
+      typeof item?.actionCategory === 'string' ? item.actionCategory.trim() : '';
+    const actionLabel =
+      typeof item?.actionLabel === 'string' && item.actionLabel.trim()
+        ? item.actionLabel.trim()
+        : actionCategory
+          ? `${actionCategory} 내역 확인하기`
+          : '목표 다시 보기';
+    insights.push({
+      id: typeof item?.id === 'string' && item.id.trim()
+        ? item.id.trim()
+        : `insight-${index + 1}`,
+      title: title.slice(0, 60),
+      body: body.slice(0, 300),
+      actionLabel: actionLabel.slice(0, 40),
+      actionCategory,
+    });
+    if (insights.length === 3) break;
+  }
+  return insights;
+}
+
+const insightSystemPrompt =
+  '당신은 한국어 개인 금융 코치입니다. 사용자의 월간 소비 요약(JSON)을 읽고 ' +
+  '실천 가능한 피드백 카드를 1~3개 만드세요. 존댓말의 짧고 친근한 문장을 쓰고, ' +
+  '요약에 없는 금액이나 거래를 지어내지 마세요. actionCategory는 요약에 등장한 ' +
+  '카테고리 이름 그대로 쓰거나 빈 문자열로 두세요. JSON 객체 {"insights": ' +
+  '[{"id": string, "title": string, "body": string, "actionLabel": string, ' +
+  '"actionCategory": string}]}만 반환하세요.';
+
+async function generateSpendingInsights(summary) {
+  const parsed = await callAiWithPrompt({
+    system: insightSystemPrompt,
+    user: JSON.stringify(summary),
+    maxTokens: 700,
+    temperature: 0.2,
+  });
+  return normalizeInsights(parsed);
+}
+
+async function readJsonBody(request) {
+  const chunks = [];
+  for await (const chunk of request) {
+    chunks.push(chunk);
+    if (Buffer.concat(chunks).length > 64_000) {
+      throw new Error('요청 본문이 너무 큽니다.');
+    }
+  }
+  if (chunks.length === 0) return null;
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch {
+    return null;
+  }
 }
 
 async function searchProducts(query) {
@@ -211,6 +310,11 @@ async function handleRequest(request, response) {
           Boolean(process.env.WATSONX_PROJECT_ID) &&
           Boolean(process.env.WATSONX_URL) &&
           Boolean(process.env.WATSONX_MODEL_ID),
+        spendingInsights:
+          Boolean(process.env.WATSONX_API_KEY) &&
+          Boolean(process.env.WATSONX_PROJECT_ID) &&
+          Boolean(process.env.WATSONX_URL) &&
+          Boolean(process.env.WATSONX_MODEL_ID),
         productSearch: Boolean(process.env.SERPAPI_API_KEY),
       },
     });
@@ -221,6 +325,25 @@ async function handleRequest(request, response) {
   if (url.pathname.startsWith('/api/events')) {
     const handled = await handleEventsRoute(request, response, url);
     if (handled) return;
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/insights') {
+    const summary = await readJsonBody(request).catch(() => null);
+    if (!summary || typeof summary !== 'object' || Array.isArray(summary)) {
+      sendJson(response, 400, { error: '소비 요약(JSON)이 필요합니다.' });
+      return;
+    }
+    try {
+      const insights = await generateSpendingInsights(summary);
+      sendJson(response, 200, { insights });
+    } catch (error) {
+      const statusCode = error instanceof ConfigurationError ? 503 : 502;
+      sendJson(response, statusCode, {
+        error:
+          error instanceof Error ? error.message : 'AI 피드백 생성에 실패했습니다.',
+      });
+    }
+    return;
   }
 
   if (request.method !== 'GET' || url.pathname !== '/api/products/search') {

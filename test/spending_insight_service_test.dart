@@ -6,49 +6,14 @@ import 'package:ibm_money_app/spending_insight_service.dart';
 
 void main() {
   test(
-    'requests AI only for real data on the spending tab when data changed',
+    'requests AI only when the user taps and a call is not already running',
     () {
-      const fingerprint = 'month-a';
-      expect(
-        shouldRequestSpendingInsights(
-          isDemoData: true,
-          isSpendingTabVisible: true,
-          fingerprint: fingerprint,
-          lastRequestedFingerprint: null,
-        ),
-        isFalse,
-      );
-      expect(
-        shouldRequestSpendingInsights(
-          isDemoData: false,
-          isSpendingTabVisible: false,
-          fingerprint: fingerprint,
-          lastRequestedFingerprint: null,
-        ),
-        isFalse,
-      );
-      expect(
-        shouldRequestSpendingInsights(
-          isDemoData: false,
-          isSpendingTabVisible: true,
-          fingerprint: fingerprint,
-          lastRequestedFingerprint: fingerprint,
-        ),
-        isFalse,
-      );
-      expect(
-        shouldRequestSpendingInsights(
-          isDemoData: false,
-          isSpendingTabVisible: true,
-          fingerprint: fingerprint,
-          lastRequestedFingerprint: null,
-        ),
-        isTrue,
-      );
+      expect(shouldRequestSpendingInsights(isLoading: true), isFalse);
+      expect(shouldRequestSpendingInsights(isLoading: false), isTrue);
     },
   );
 
-  test('fingerprint changes when monthly totals change', () {
+  test('summary contains monthly totals but no merchant names', () {
     const goal = SavingsGoal(
       name: 'AirPods',
       imageAsset: null,
@@ -57,45 +22,40 @@ void main() {
       savingAmount: 10000,
       savingPeriod: SavingPeriod.daily,
     );
-    final quietMonth = buildSpendingInsightRequest(
+    final request = buildSpendingInsightRequest(
       transactions: [
         MoneyTransaction(
           id: '1',
-          merchant: '카페',
-          category: '카페',
-          amount: 4500,
-          date: DateTime(2026, 8, 2),
-        ),
-      ],
-      goal: goal,
-      isDemo: false,
-      asOf: DateTime(2026, 8, 27),
-    );
-    final busyMonth = buildSpendingInsightRequest(
-      transactions: [
-        MoneyTransaction(
-          id: '1',
-          merchant: '카페',
+          merchant: '스타벅스역삼',
           category: '카페',
           amount: 4500,
           date: DateTime(2026, 8, 2),
         ),
         MoneyTransaction(
           id: '2',
-          merchant: '배달',
+          merchant: '배민',
           category: '배달',
           amount: 22000,
           date: DateTime(2026, 8, 3),
         ),
+        MoneyTransaction(
+          id: '3',
+          merchant: '지난달 거래',
+          category: '카페',
+          amount: 9000,
+          date: DateTime(2026, 7, 20),
+        ),
       ],
       goal: goal,
-      isDemo: false,
       asOf: DateTime(2026, 8, 27),
     );
+    final json = request.toJson();
 
-    expect(quietMonth.fingerprint, isNot(busyMonth.fingerprint));
-    expect(quietMonth.toJson()['thisMonthSpent'], 4500);
-    expect(busyMonth.toJson()['thisMonthSpent'], 26500);
+    expect(json['thisMonthSpent'], 26500);
+    expect(json['lastMonthSpent'], 9000);
+    expect(json['topCategory'], '배달');
+    expect(json.toString(), isNot(contains('스타벅스역삼')));
+    expect((json['goal'] as Map<String, dynamic>)['name'], 'AirPods');
   });
 
   test('insight service posts a summary and parses insights', () async {
@@ -103,7 +63,6 @@ void main() {
       expect(request.method, 'POST');
       expect(request.url.path, '/api/insights');
       expect(request.body, contains('thisMonthSpent'));
-      expect(request.body, isNot(contains('스타벅스역삼')));
       return http.Response(
         '{"insights":[{"id":"delivery","title":"배달이 늘었어요","body":"한 끼만 줄여 보세요.","actionLabel":"배달 내역 확인하기","actionCategory":"배달"}]}',
         200,
@@ -130,12 +89,51 @@ void main() {
         goalPrice: 299000,
         daysToGoal: 20,
         dailySavingAmount: 10000,
-        isDemo: false,
       ),
     );
 
     expect(insights, hasLength(1));
     expect(insights.single.title, '배달이 늘었어요');
     expect(insights.single.actionCategory, '배달');
+  });
+
+  test('insight service surfaces the server error message', () async {
+    final client = MockClient((request) async {
+      return http.Response(
+        '{"error":"WATSONX_MODEL_ID / WATSONX_PROJECT_ID 설정이 필요합니다."}',
+        503,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+    });
+    final service = SpendingInsightService(
+      client: client,
+      baseUrl: 'https://api.example.com',
+    );
+    addTearDown(service.close);
+
+    await expectLater(
+      service.fetch(
+        const SpendingInsightRequest(
+          year: 2026,
+          month: 8,
+          thisMonthSpent: 50000,
+          lastMonthSpent: 30000,
+          count: 4,
+          averagePerDay: 2000,
+          categories: [],
+          goalName: 'AirPods',
+          goalPrice: 299000,
+          daysToGoal: 20,
+          dailySavingAmount: 10000,
+        ),
+      ),
+      throwsA(
+        isA<SpendingInsightException>().having(
+          (error) => error.message,
+          'message',
+          contains('WATSONX_MODEL_ID'),
+        ),
+      ),
+    );
   });
 }
