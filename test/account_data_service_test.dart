@@ -44,6 +44,17 @@ void main() {
     );
   });
 
+  test('clearSaved removes persisted consumer data', () async {
+    final service = AccountDataService();
+    await service.save(
+      const AccountData(balance: 10, transactions: [], isDemo: false),
+    );
+
+    expect(await service.loadSaved(), isNotNull);
+    await service.clearSaved();
+    expect(await service.loadSaved(), isNull);
+  });
+
   test('imports Toss-style Excel transaction statement', () {
     final workbook = Excel.createExcel();
     final sheet = workbook['Sheet1'];

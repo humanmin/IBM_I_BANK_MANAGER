@@ -3,11 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ibm_money_app/app_widgets.dart';
 import 'package:ibm_money_app/auth_service.dart';
+import 'package:ibm_money_app/home_screen.dart';
 import 'package:ibm_money_app/models.dart';
 import 'package:ibm_money_app/money_app.dart';
 import 'package:ibm_money_app/money_utils.dart';
 import 'package:ibm_money_app/product_search_service.dart';
+import 'package:ibm_money_app/seed_data.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeProductSearchGateway implements ProductSearchGateway {
@@ -101,15 +104,22 @@ class _FakeAuthGateway implements AuthGateway {
   }
 
   @override
+  Future<void> deleteAccount() async {
+    user = null;
+    _changes.add(null);
+  }
+
+  @override
   Future<String?> currentIdToken() async => null;
 }
 
 Widget _testApp({
   AppUser? user = _returningUser,
+  AuthGateway? authGateway,
   ProductSearchGateway? productSearchGateway,
 }) {
   return MoneyApp(
-    authGateway: _FakeAuthGateway(user: user),
+    authGateway: authGateway ?? _FakeAuthGateway(user: user),
     productSearchGateway: productSearchGateway,
   );
 }
@@ -273,6 +283,49 @@ void main() {
     expect(find.byKey(const Key('category-pie-card')), findsNothing);
   });
 
+  testWidgets('connected first-time home hides the onboarding guide', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(402, 874));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ThemeScope(
+          palette: AppPalette.fromChoice(ThemeChoice.green),
+          child: Scaffold(
+            body: HomeScreen(
+              currentUser: _firstTimeUser,
+              goal: initialGoal,
+              unreadCount: 0,
+              transactions: [
+                MoneyTransaction(
+                  id: 'connected-1',
+                  merchant: '테스트 상점',
+                  category: '쇼핑',
+                  amount: 10000,
+                  date: DateTime(2026, 8, 27),
+                ),
+              ],
+              onOpenNotifications: () {},
+              onPeriodChanged: (_) {},
+              onAmountChanged: (_) {},
+              onSavePressed: () {},
+              onSaveWithToss: () {},
+              onOpenSpending: () {},
+              onOpenShop: (_) {},
+              onBuy: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('first-time-onboarding-card')), findsNothing);
+    expect(find.byKey(const Key('save-with-toss-button')), findsOneWidget);
+  });
+
   testWidgets('saving action wraps as a whole and stays left aligned', (
     tester,
   ) async {
@@ -288,7 +341,10 @@ void main() {
     final savingSentence = find.byKey(const Key('saving-sentence-wrap'));
     final savingPeriod = find.byKey(const Key('saving-period-menu'));
     final wonText = find.text('원을');
-    final savingAction = find.text('저축하기');
+    final savingAction = find.descendant(
+      of: savingSentence,
+      matching: find.text('저축하기'),
+    );
     expect(
       (tester.getCenter(amountField).dy - tester.getCenter(savingAction).dy)
           .abs(),
@@ -441,6 +497,42 @@ void main() {
     // If AnimatedSwitcher centered the short settings page, this title
     // would sit around the middle of the 874-tall surface.
     expect(tester.getTopLeft(find.text('설정').first).dy, lessThan(48));
+  });
+
+  testWidgets('account deletion requires the current user name', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(402, 874));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final auth = _FakeAuthGateway(user: _firstTimeUser);
+
+    await tester.pumpWidget(
+      _testApp(
+        authGateway: auth,
+        productSearchGateway: _FakeProductSearchGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('nav-settings')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('delete-account-button')));
+    await tester.pumpAndSettle();
+
+    final confirm = find.byKey(const Key('confirm-delete-account-button'));
+    expect(find.byKey(const Key('delete-account-dialog')), findsOneWidget);
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+
+    await tester.enterText(
+      find.byKey(const Key('delete-account-name-field')),
+      '김민진',
+    );
+    await tester.pump();
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNotNull);
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+
+    expect(auth.user, isNull);
+    expect(find.byKey(const Key('auth-login-entry')), findsOneWidget);
   });
 
   testWidgets('spending summary keeps only the compact data card', (
