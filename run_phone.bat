@@ -38,4 +38,13 @@ echo Connecting the phone to the local product search server...
 "%ADB%" -s "%DEVICE_ID%" reverse tcp:8080 tcp:8080
 if errorlevel 1 exit /b 1
 
-flutter run -d "%DEVICE_ID%" --dart-define=PRODUCT_SEARCH_API_URL=http://127.0.0.1:8080
+set "KAKAO_NATIVE_APP_KEY="
+for /f "tokens=1,* delims==" %%A in ('findstr /b /c:"kakao.nativeAppKey=" android\local.properties 2^>nul') do set "KAKAO_NATIVE_APP_KEY=%%B"
+
+if not defined KAKAO_NATIVE_APP_KEY (
+  echo [WARN] Kakao Native App Key is not configured.
+  echo Add kakao.nativeAppKey=YOUR_KEY to android\local.properties to enable Kakao login.
+  flutter run -d "%DEVICE_ID%" --dart-define=PRODUCT_SEARCH_API_URL=http://127.0.0.1:8080
+) else (
+  flutter run -d "%DEVICE_ID%" --dart-define=PRODUCT_SEARCH_API_URL=http://127.0.0.1:8080 --dart-define=KAKAO_NATIVE_APP_KEY=%KAKAO_NATIVE_APP_KEY%
+)
