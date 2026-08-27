@@ -32,6 +32,7 @@ abstract interface class AuthGateway {
   Future<AppUser> signInWithEmail(String email, String password);
   Future<AppUser> signInWithKakao();
   Future<void> signOut();
+  Future<void> deleteAccount();
 
   /// 서버 API 호출 시 Authorization 헤더에 넣을 ID Token.
   /// 매 호출마다 새로 받아야 함 (만료 시 SDK가 자동 갱신).
@@ -319,6 +320,46 @@ class FirebaseAuthService implements AuthGateway {
       // 이미 로그아웃 상태이거나 Firebase 미초기화 — 무시
     }
     _emit(null);
+  }
+
+  @override
+  Future<void> deleteAccount() async {
+    final provider = _sessionUser?.provider ?? currentUser?.provider;
+    try {
+      switch (provider) {
+        case AuthProviderType.kakao:
+          await UserApi.instance.unlink();
+          break;
+        case AuthProviderType.email:
+          final user = _client.currentUser;
+          if (user == null) {
+            throw const AuthException('삭제할 로그인 계정을 찾을 수 없어요.');
+          }
+          await user.delete();
+          break;
+        case AuthProviderType.demo:
+          await _clearDemoSession();
+          break;
+        case null:
+          throw const AuthException('삭제할 로그인 계정을 찾을 수 없어요.');
+      }
+      await _clearDemoSession();
+      _emit(null);
+    } on AuthException {
+      rethrow;
+    } on fb.FirebaseAuthException catch (error) {
+      if (error.code == 'requires-recent-login') {
+        throw const AuthException('보안을 위해 다시 로그인한 뒤 계정 삭제를 다시 시도해 주세요.');
+      }
+      throw AuthException(error.message ?? '계정을 삭제하지 못했어요.');
+    } on KakaoClientException catch (error) {
+      if (error.reason == ClientErrorCause.cancelled) {
+        throw const AuthException('계정 삭제를 취소했어요.');
+      }
+      throw const AuthException('카카오 계정 연결을 해제하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } catch (_) {
+      throw const AuthException('계정을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    }
   }
 
   @override

@@ -666,6 +666,30 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _openTossForSaving() async {
+    final result = await openTossForSaving();
+    if (!mounted || result == DeepLinkResult.opened) return;
+    final context = _navigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('토스 앱을 열 수 없어요. 토스가 설치되어 있는지 확인해 주세요.')),
+    );
+  }
+
+  Future<void> _deleteCurrentAccount() async {
+    await _authGateway.deleteAccount();
+    await _accountDataService.clearSaved();
+    if (!mounted) return;
+    setState(() {
+      _accountData = const AccountData(
+        balance: 0,
+        transactions: [],
+        isDemo: false,
+      );
+      _resetFirstTimeSession();
+    });
+  }
+
   void _addFixedExpense(FixedExpense expense) {
     setState(() => _fixedExpenses.add(expense));
   }
@@ -806,6 +830,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
         onPeriodChanged: _changePeriod,
         onAmountChanged: _changeSavingAmount,
         onSavePressed: _saveWithBank,
+        onSaveWithToss: _openTossForSaving,
         onOpenSpending: _openSpending,
         onOpenShop: (context) => _openWishlistSheet(context),
         onBuy: () => setState(() => _activeTab = AppTab.payment),
@@ -814,6 +839,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
       AppTab.settings => SettingsScreen(
         currentUser: _currentUser,
         onOpenAccount: _openAccount,
+        onDeleteAccount: _deleteCurrentAccount,
       ),
       AppTab.notifications => NotificationsScreen(
         onBack: () => setState(() => _activeTab = AppTab.home),

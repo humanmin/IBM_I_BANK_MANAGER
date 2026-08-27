@@ -111,6 +111,12 @@ class AccountDataService {
     await preferences.setString(_storageKey, jsonEncode(json));
   }
 
+  Future<void> clearSaved() async {
+    if (!_persist) return;
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_storageKey);
+  }
+
   Future<({AccountData data, int imported, int skipped})?> importDocument(
     AccountData current, {
     ExcelPasswordRequest? requestPassword,
@@ -209,7 +215,7 @@ class AccountDataService {
       if (raw == null) return null;
       final bytes = raw['bytes'];
       if (bytes is! Uint8List || bytes.isEmpty) {
-        throw const AccountImportException('선택한 파일을 읽을 수 없어요.');
+        throw const AccountImportException('선택한 파일을 읽을ㅌ 수 없어요.');
       }
       return _PickedDocument(
         name: raw['name']?.toString() ?? '거래내역',
