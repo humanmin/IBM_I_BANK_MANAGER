@@ -14,18 +14,14 @@ class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
     required this.currentUser,
     required this.themeChoice,
-    required this.isDarkMode,
     required this.onThemeChanged,
-    required this.onDarkModeChanged,
     required this.onOpenAccount,
     super.key,
   });
 
   final AppUser? currentUser;
   final ThemeChoice themeChoice;
-  final bool isDarkMode;
   final ValueChanged<ThemeChoice> onThemeChanged;
-  final ValueChanged<bool> onDarkModeChanged;
   final VoidCallback onOpenAccount;
 
   static const _themeLabels = <ThemeChoice, String>{
@@ -47,7 +43,7 @@ class SettingsScreen extends StatelessWidget {
 
     return SingleChildScrollView(
       key: const PageStorageKey('settings-scroll'),
-      padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -202,47 +198,6 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 );
               }).toList(),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // ── 표시 섹션 (추후 확장 예정) ─────────────────────────
-          Text(
-            '표시',
-            style: TextStyle(
-              color: palette.textSoft,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          SoftCard(
-            color: palette.surface,
-            radius: 16,
-            child: Row(
-              children: [
-                Icon(
-                  Icons.dark_mode_outlined,
-                  color: palette.text,
-                  size: 20,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    '다크 모드',
-                    style: TextStyle(
-                      color: palette.text,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                Switch(
-                  value: isDarkMode,
-                  activeTrackColor: palette.accent,
-                  onChanged: onDarkModeChanged,
-                ),
-              ],
             ),
           ),
         ],

@@ -4,8 +4,8 @@ enum AppTab {
   home,
   notifications,
   habits,
-  insights,
   spending,
+  history,
   shop,
   payment,
   event,
@@ -121,6 +121,7 @@ class AppPalette {
   final Color accentBorder;
   final Color accentTrack;
   final Color pageBackground;
+
   /// 카드/시트 등 콘텐츠 배경색. 라이트 모드에서는 흰색, 다크 모드에서는
   /// 어두운 회색 계열입니다. 기존에 여러 화면에서 하드코딩돼 있던
   /// `Colors.white` 카드 배경을 이 필드로 교체해 다크 모드에 대응합니다.
@@ -402,6 +403,18 @@ class Insight {
   final String body;
   final String actionLabel;
   final String actionCategory;
+
+  factory Insight.fromJson(Map<String, dynamic> json) {
+    return Insight(
+      id: (json['id'] as String?)?.trim() ?? 'insight',
+      title: (json['title'] as String?)?.trim() ?? '',
+      body: (json['body'] as String?)?.trim() ?? '',
+      actionLabel: (json['actionLabel'] as String?)?.trim().isNotEmpty == true
+          ? (json['actionLabel'] as String).trim()
+          : '내역 확인하기',
+      actionCategory: (json['actionCategory'] as String?)?.trim() ?? '',
+    );
+  }
 }
 
 @immutable

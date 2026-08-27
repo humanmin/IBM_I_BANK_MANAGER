@@ -41,12 +41,23 @@ void main() {
     expect(find.text('AirPods'), findsOneWidget);
     expect(find.text('24일 후면 살 수 있어요!'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('nav-insights')));
+    await tester.tap(find.byKey(const Key('nav-spending')));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('이번 달 한마디'),
+      350,
+      scrollable: find.descendant(
+        of: find.byKey(const PageStorageKey('spending-scroll')),
+        matching: find.byType(Scrollable),
+      ),
+    );
     expect(find.text('이번 달 한마디'), findsOneWidget);
     expect(find.text('배달이 조금 늘었어요'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('nav-shop')));
+    await tester.tap(find.byKey(const Key('nav-home')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('open-shop-button')));
+    await tester.tap(find.byKey(const Key('open-shop-button')));
     await tester.pumpAndSettle();
     expect(find.text('내 위시리스트'), findsOneWidget);
     expect(find.text('watsonx AI 상품 검색'), findsOneWidget);
@@ -198,15 +209,19 @@ void main() {
       find.byKey(const Key('add-fixed-expense-button')),
     );
     expect(addButtonSize.width, greaterThan(300));
-    expect(addButtonSize.height, greaterThanOrEqualTo(66));
+    expect(addButtonSize.height, greaterThanOrEqualTo(44));
     expect(find.text('+ 등록'), findsOneWidget);
     final addButton = tester.widget<TextButton>(
       find.byKey(const Key('add-fixed-expense-button')),
     );
     expect(
       addButton.style?.foregroundColor?.resolve(<WidgetState>{}),
-      const Color(0xFF000000),
+      const Color(0xFF9A9A9A),
     );
+    await tester.ensureVisible(
+      find.byKey(const Key('add-fixed-expense-button')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('add-fixed-expense-button')));
     await tester.pumpAndSettle();
 
@@ -225,6 +240,24 @@ void main() {
     expect(find.text('OTT·구독 · 매월 15일'), findsOneWidget);
   });
 
+  testWidgets('settings title sits near the top of the tab', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(402, 874));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MoneyApp(productSearchGateway: _FakeProductSearchGateway()),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('nav-settings')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('설정'), findsWidgets);
+    // If AnimatedSwitcher centered the short settings page, this title
+    // would sit around the middle of the 874-tall surface.
+    expect(tester.getTopLeft(find.text('설정').first).dy, lessThan(48));
+  });
+
   testWidgets('spending summary keeps only the compact data card', (
     tester,
   ) async {
@@ -240,8 +273,11 @@ void main() {
     expect(find.byKey(const Key('account-balance-value')), findsNothing);
     expect(find.text('이번 달 총 지출'), findsNothing);
     expect(find.text('가장 많이 쓴 곳'), findsNothing);
-    expect(find.text('가장 많이 쓴 카테고리'), findsOneWidget);
-    expect(find.byKey(const Key('top-category-card')), findsOneWidget);
+    expect(find.text('가장 많이 쓴 카테고리'), findsNothing);
+    expect(find.byKey(const Key('top-category-card')), findsNothing);
+    expect(find.text('거래 횟수'), findsNothing);
+    expect(find.text('건당 평균'), findsNothing);
+    expect(find.text('하루 평균'), findsNothing);
     expect(find.byKey(const Key('category-pie-card')), findsOneWidget);
     expect(find.byKey(const Key('category-pie-chart')), findsOneWidget);
     expect(find.byKey(const Key('spending-bar-card')), findsOneWidget);
@@ -254,23 +290,27 @@ void main() {
       lessThanOrEqualTo(130),
     );
 
+    expect(find.byKey(const Key('recent-transactions-button')), findsNothing);
     expect(find.byKey(const Key('recent-transactions-sheet')), findsNothing);
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('recent-transactions-button')),
-      350,
-      scrollable: find.descendant(
-        of: find.byKey(const PageStorageKey('spending-scroll')),
-        matching: find.byType(Scrollable),
-      ),
-    );
-    await tester.drag(
-      find.byKey(const PageStorageKey('spending-scroll')),
-      const Offset(0, -180),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('recent-transactions-button')));
+
+    await tester.tap(find.byKey(const Key('nav-history')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('recent-transactions-sheet')), findsOneWidget);
     expect(find.byKey(const Key('recent-filter-all')), findsOneWidget);
+    expect(find.text('최근 내역'), findsWidgets);
+    expect(find.text('거래 횟수'), findsOneWidget);
+    expect(find.text('건당 평균'), findsOneWidget);
+    expect(find.text('하루 평균'), findsOneWidget);
+    expect(find.text('가장 많이 쓴 카테고리'), findsOneWidget);
+    expect(find.byKey(const Key('top-category-card')), findsOneWidget);
+
+    final topCard = find.byKey(const Key('top-category-card'));
+    final startY = tester.getTopLeft(topCard).dy;
+    await tester.drag(
+      find.byKey(const Key('recent-transactions-sheet')),
+      const Offset(0, -240),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(topCard).dy, lessThan(startY - 80));
   });
 }
