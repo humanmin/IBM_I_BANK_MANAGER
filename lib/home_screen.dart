@@ -10,37 +10,37 @@ class HomeScreen extends StatelessWidget {
     required this.selectedProfile,
     required this.goal,
     required this.unreadCount,
-    required this.accountBalance,
     required this.transactions,
-    required this.isDemoData,
     required this.onProfileChanged,
     required this.onOpenNotifications,
     required this.onPeriodChanged,
     required this.onAmountChanged,
+    required this.onSavePressed,
     required this.onOpenSpending,
     required this.onOpenShop,
     required this.onBuy,
+    this.signedInDisplayName,
+    this.hasSelectedGoal = false,
     super.key,
   });
 
   final HomeUserProfile selectedProfile;
   final SavingsGoal goal;
   final int unreadCount;
-  final int accountBalance;
   final List<MoneyTransaction> transactions;
-  final bool isDemoData;
   final ValueChanged<HomeUserProfile> onProfileChanged;
   final VoidCallback onOpenNotifications;
   final ValueChanged<SavingPeriod> onPeriodChanged;
   final ValueChanged<int> onAmountChanged;
+  final VoidCallback onSavePressed;
   final VoidCallback onOpenSpending;
   final ValueChanged<BuildContext> onOpenShop;
   final VoidCallback onBuy;
+  final String? signedInDisplayName;
+  final bool hasSelectedGoal;
 
   @override
   Widget build(BuildContext context) {
-    final palette = ThemeScope.paletteOf(context);
-    final now = DateTime.now();
     return SingleChildScrollView(
       key: const PageStorageKey('home-scroll'),
       padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
@@ -48,6 +48,9 @@ class HomeScreen extends StatelessWidget {
         children: [
           _DashboardHeader(
             selectedProfile: selectedProfile,
+            headerTitle: selectedProfile.isFirstTime
+                ? (signedInDisplayName ?? selectedProfile.displayName)
+                : selectedProfile.displayName,
             unreadCount: unreadCount,
             onProfileChanged: onProfileChanged,
             onOpenNotifications: onOpenNotifications,
@@ -55,65 +58,29 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(height: 22),
           if (selectedProfile.isFirstTime)
             _FirstTimeUserHome(
-              userName: selectedProfile.displayName,
+              userName: signedInDisplayName ?? selectedProfile.displayName,
+              goal: goal,
+              hasSelectedGoal: hasSelectedGoal,
               hasAccountData: transactions.isNotEmpty,
               onOpenShop: () => onOpenShop(context),
               onOpenSpending: onOpenSpending,
+              onPeriodChanged: onPeriodChanged,
+              onAmountChanged: onAmountChanged,
+              onSavePressed: onSavePressed,
+              onBuy: onBuy,
             )
           else ...[
             SavingPlanCard(
               goal: goal,
               onPeriodChanged: onPeriodChanged,
               onAmountChanged: onAmountChanged,
+              onSavePressed: onSavePressed,
             ),
             const SizedBox(height: 16),
             _GoalCard(
               goal: goal,
               onBuy: onBuy,
               onOpenShop: () => onOpenShop(context),
-            ),
-            const SizedBox(height: 16),
-            SoftCard(
-              color: palette.accentSoft,
-              onTap: onOpenSpending,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isDemoData ? '현재 잔액 · 예시 데이터' : '현재 잔액',
-                    style: TextStyle(
-                      color: palette.textSoft,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    formatWon(accountBalance),
-                    style: TextStyle(
-                      color: palette.text,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.8,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(
-                        '이번 달 지출 ${formatWon(monthSpent(transactions, now.year, now.month))}',
-                        style: TextStyle(color: palette.textSoft, fontSize: 12),
-                      ),
-                      const Spacer(),
-                      Icon(
-                        Icons.chevron_right,
-                        color: palette.textSoft,
-                        size: 18,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
             ),
           ],
         ],
@@ -125,93 +92,107 @@ class HomeScreen extends StatelessWidget {
 class _FirstTimeUserHome extends StatelessWidget {
   const _FirstTimeUserHome({
     required this.userName,
+    required this.goal,
+    required this.hasSelectedGoal,
     required this.hasAccountData,
     required this.onOpenShop,
     required this.onOpenSpending,
+    required this.onPeriodChanged,
+    required this.onAmountChanged,
+    required this.onSavePressed,
+    required this.onBuy,
   });
 
   final String userName;
+  final SavingsGoal goal;
+  final bool hasSelectedGoal;
   final bool hasAccountData;
   final VoidCallback onOpenShop;
   final VoidCallback onOpenSpending;
+  final ValueChanged<SavingPeriod> onPeriodChanged;
+  final ValueChanged<int> onAmountChanged;
+  final VoidCallback onSavePressed;
+  final VoidCallback onBuy;
 
   @override
   Widget build(BuildContext context) {
     final palette = ThemeScope.paletteOf(context);
+    final savingPlanCard = SavingPlanCard(
+      key: const Key('first-time-saving-plan'),
+      goal: goal,
+      onPeriodChanged: onPeriodChanged,
+      onAmountChanged: onAmountChanged,
+      onSavePressed: onSavePressed,
+    );
     return Column(
       key: const Key('first-time-user-home'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SoftCard(
-          color: palette.accentSoft,
-          padding: const EdgeInsets.all(22),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: palette.surface.withValues(alpha: 0.72),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '처음 시작',
-                  style: TextStyle(
-                    color: palette.textSoft,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
+        savingPlanCard,
+        const SizedBox(height: 16),
+        if (hasSelectedGoal)
+          _GoalCard(
+            goal: goal,
+            onBuy: onBuy,
+            onOpenShop: onOpenShop,
+          )
+        else
+          SoftCard(
+            color: palette.accentSoft,
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: palette.surface.withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '처음 시작',
+                    style: TextStyle(
+                      color: palette.textSoft,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  color: palette.surface,
-                  borderRadius: BorderRadius.circular(18),
+                const SizedBox(height: 18),
+                Text(
+                  '$userName님, 반가워요!',
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 25,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.8,
+                  ),
                 ),
-                child: Icon(
-                  Icons.savings_outlined,
-                  color: palette.text,
-                  size: 28,
+                const SizedBox(height: 7),
+                Text(
+                  '갖고 싶은 상품을 고르면 목표 금액과\n저축 계획을 함께 만들어 드릴게요.',
+                  style: TextStyle(
+                    color: palette.textSoft,
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                '$userName님, 반가워요!',
-                style: TextStyle(
-                  color: palette.text,
-                  fontSize: 25,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.8,
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    key: const Key('first-goal-button'),
+                    onPressed: onOpenShop,
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('첫 저축 목표 만들기'),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 7),
-              Text(
-                '갖고 싶은 상품을 고르면 목표 금액과\n저축 계획을 함께 만들어 드릴게요.',
-                style: TextStyle(
-                  color: palette.textSoft,
-                  fontSize: 14,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 22),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  key: const Key('first-goal-button'),
-                  onPressed: onOpenShop,
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('첫 저축 목표 만들기'),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
         const SizedBox(height: 16),
         SoftCard(
           color: mutedBackground,
@@ -333,12 +314,14 @@ class _OnboardingStep extends StatelessWidget {
 class _DashboardHeader extends StatelessWidget {
   const _DashboardHeader({
     required this.selectedProfile,
+    required this.headerTitle,
     required this.unreadCount,
     required this.onProfileChanged,
     required this.onOpenNotifications,
   });
 
   final HomeUserProfile selectedProfile;
+  final String headerTitle;
   final int unreadCount;
   final ValueChanged<HomeUserProfile> onProfileChanged;
   final VoidCallback onOpenNotifications;
@@ -349,7 +332,7 @@ class _DashboardHeader extends StatelessWidget {
     return Row(
       children: [
         Text(
-          selectedProfile.displayName,
+          headerTitle,
           style: TextStyle(
             color: palette.text,
             fontSize: 26,

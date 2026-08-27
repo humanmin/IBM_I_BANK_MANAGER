@@ -269,6 +269,7 @@ class SavingPlanCard extends StatefulWidget {
     required this.goal,
     required this.onPeriodChanged,
     required this.onAmountChanged,
+    required this.onSavePressed,
     this.compact = false,
     super.key,
   });
@@ -276,6 +277,7 @@ class SavingPlanCard extends StatefulWidget {
   final SavingsGoal goal;
   final ValueChanged<SavingPeriod> onPeriodChanged;
   final ValueChanged<int> onAmountChanged;
+  final VoidCallback onSavePressed;
   final bool compact;
 
   @override
@@ -482,14 +484,26 @@ class _SavingPlanCardState extends State<SavingPlanCard> {
                   letterSpacing: -0.7,
                 ),
               ),
-              Text(
-                '저축하기',
-                style: TextStyle(
-                  color: palette.text,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.7,
-                  height: 1.4,
+              InkWell(
+                key: const Key('saving-action'),
+                onTap: widget.onSavePressed,
+                child: Container(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: palette.text, width: 2),
+                    ),
+                  ),
+                  child: Text(
+                    '저축하기',
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.7,
+                      height: 1.4,
+                    ),
+                  ),
                 ),
               ),
             ],

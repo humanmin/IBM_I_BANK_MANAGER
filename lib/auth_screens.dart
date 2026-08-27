@@ -42,7 +42,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _passwordController.text,
       );
       if (!mounted) return;
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -223,8 +223,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
       if (!mounted) return;
       // 회원가입 성공 -> Firebase가 자동으로 로그인 상태로 만들어줌.
       // 로그인 화면, 회원가입 화면 둘 다 닫고 원래 화면으로 복귀.
-      Navigator.of(context).pop();
-      Navigator.of(context).pop();
+      final navigator = Navigator.of(context);
+      navigator.pop();
+      navigator.pop(true);
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -340,6 +341,100 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 로그인/회원가입 직후 홈에 보여 줄 이름을 받는 하단 시트.
+class DisplayNameSheet extends StatefulWidget {
+  const DisplayNameSheet({this.initialName, super.key});
+
+  final String? initialName;
+
+  @override
+  State<DisplayNameSheet> createState() => _DisplayNameSheetState();
+}
+
+class _DisplayNameSheetState extends State<DisplayNameSheet> {
+  late final TextEditingController _nameController;
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initialName ?? '');
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    Navigator.pop(context, _nameController.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = ThemeScope.paletteOf(context);
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AppSheetHeader(
+                icon: Icons.badge_outlined,
+                title: '이름을 알려 주세요',
+                subtitle: '홈 화면에 이 이름으로 인사할게요.',
+                onClose: () => Navigator.pop(context),
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                key: const Key('display-name-field'),
+                controller: _nameController,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _submit(),
+                decoration: const InputDecoration(
+                  labelText: '이름',
+                  hintText: '예: 민진',
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
+                validator: (value) {
+                  final name = value?.trim() ?? '';
+                  if (name.isEmpty) return '이름을 입력해 주세요.';
+                  if (name.length > 12) return '이름은 12자 이하로 입력해 주세요.';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  key: const Key('save-display-name-button'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: palette.accent,
+                    foregroundColor: palette.text,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onPressed: _submit,
+                  child: const Text('저장하기'),
+                ),
+              ),
+            ],
           ),
         ),
       ),

@@ -11,6 +11,7 @@ import 'auth_service.dart';
 import 'commerce_screens.dart';
 import 'event_screens.dart';
 import 'event_service.dart';
+import 'bank_deeplink.dart';
 import 'home_screen.dart';
 import 'models.dart';
 import 'report_screens.dart';
@@ -196,11 +197,13 @@ class MoneyApp extends StatefulWidget {
   const MoneyApp({
     this.productSearchGateway,
     this.spendingInsightGateway,
+    this.authGateway,
     super.key,
   });
 
   final ProductSearchGateway? productSearchGateway;
   final SpendingInsightGateway? spendingInsightGateway;
+  final AuthGateway? authGateway;
 
   @override
   State<MoneyApp> createState() => _MoneyAppState();
@@ -209,11 +212,13 @@ class MoneyApp extends StatefulWidget {
 class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   static const _selectedProfileStorageKey = 'selected_home_user_profile_v1';
   static const _firstTimeAccountStorageKey = 'account_data_kim_minjin_v1';
+  static const _displayNameStorageKey = 'signed_in_display_name_v1';
 
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   AppTab _activeTab = AppTab.home;
   HomeUserProfile _selectedProfile = HomeUserProfile.returningUser;
   SavingsGoal _goal = initialGoal;
+  bool _firstTimeHasSelectedGoal = false;
   ThemeChoice _themeChoice = ThemeChoice.green;
   final bool _isDarkMode = false;
   int _unreadCount = demoNotifications.length;
@@ -242,6 +247,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
   late final AuthGateway _authGateway;
   late final EventGateway _eventGateway;
   AppUser? _currentUser;
+  String? _localDisplayName;
   StreamSubscription<AppUser?>? _authSubscription;
   String? _insightFingerprint;
   List<Insight>? _remoteInsights;
@@ -257,12 +263,22 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     _ownsSpendingInsightGateway = widget.spendingInsightGateway == null;
     _spendingInsightGateway =
         widget.spendingInsightGateway ?? SpendingInsightService();
-    _authGateway = FirebaseAuthService();
+    _authGateway = widget.authGateway ?? FirebaseAuthService();
     _eventGateway = EventService(auth: _authGateway);
     _currentUser = _authGateway.currentUser;
     _authSubscription = _authGateway.authStateChanges().listen((user) {
       if (!mounted) return;
-      setState(() => _currentUser = user);
+      setState(() {
+        _currentUser = user;
+        if (user == null) {
+          _localDisplayName = null;
+        } else {
+          final authName = user.displayName?.trim();
+          if (authName != null && authName.isNotEmpty) {
+            _localDisplayName = authName;
+          }
+        }
+      });
     });
     _loadAccountData();
   }
@@ -305,6 +321,9 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
         (profile) => profile.name == savedProfileName,
         orElse: () => HomeUserProfile.returningUser,
       );
+      if (_currentUser != null) {
+        _localDisplayName = preferences.getString(_displayNameStorageKey);
+      }
     });
 
     final access = await _accountDataService.isNotificationAccessGranted();
@@ -557,17 +576,30 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     await preferences.setString(_selectedProfileStorageKey, profile.name);
   }
 
+  String? get _homePersonalName {
+    if (_currentUser == null) return null;
+    final authName = _currentUser!.displayName?.trim();
+    if (authName != null && authName.isNotEmpty) return authName;
+    final localName = _localDisplayName?.trim();
+    if (localName != null && localName.isNotEmpty) return localName;
+    return null;
+  }
+
   Future<void> _openAccount() async {
     final navigatorContext = _navigatorKey.currentContext;
     if (!mounted || navigatorContext == null) return;
 
     final user = _currentUser;
     if (user == null) {
-      await Navigator.of(navigatorContext).push(
+      final loggedIn = await Navigator.of(navigatorContext).push<bool>(
         MaterialPageRoute(
           builder: (_) => LoginScreen(authGateway: _authGateway),
         ),
       );
+      if (!mounted) return;
+      if (loggedIn == true || _currentUser != null) {
+        await _promptDisplayNameIfNeeded();
+      }
       return;
     }
 
@@ -590,7 +622,60 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     );
     if (signOut == true) {
       await _authGateway.signOut();
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.remove(_displayNameStorageKey);
+      if (!mounted) return;
+      setState(() => _localDisplayName = null);
     }
+  }
+
+  Future<void> _promptDisplayNameIfNeeded() async {
+    final existing = _homePersonalName;
+    if (existing != null) return;
+    final context = _navigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+    final palette = ThemeScope.paletteOf(context);
+    final name = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: palette.surface,
+      barrierColor: const Color(0x99101D14),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      builder: (sheetContext) {
+        return ThemeScope(
+          palette: palette,
+          child: DisplayNameSheet(initialName: existing),
+        );
+      },
+    );
+    if (name == null || name.isEmpty || !mounted) return;
+    await _saveDisplayName(name);
+  }
+
+  Future<void> _saveDisplayName(String name) async {
+    try {
+      await _authGateway.updateDisplayName(name);
+    } on AuthException {
+      // Firebase에 저장하지 못해도 홈 화면에는 이름을 바로 반영합니다.
+    }
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_displayNameStorageKey, name);
+    if (!mounted) return;
+    final user = _currentUser;
+    setState(() {
+      _localDisplayName = name;
+      if (user != null) {
+        _currentUser = AppUser(
+          uid: user.uid,
+          email: user.email,
+          displayName: name,
+        );
+      }
+    });
   }
 
   void _openSpending() {
@@ -649,6 +734,20 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     setState(() => _goal = _goal.copyWith(savingAmount: amount));
   }
 
+  Future<void> _saveWithBank([BuildContext? hostContext]) async {
+    final context = hostContext ?? _navigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+    final confirmed = await runSaveWithBankFlow(
+      context: context,
+      amount: _goal.savingAmount,
+      goalName: _goal.name,
+    );
+    if (!confirmed || !mounted) return;
+    setState(() {
+      _goal = _goal.copyWith(saved: _goal.saved + _goal.savingAmount);
+    });
+  }
+
   void _addFixedExpense(FixedExpense expense) {
     setState(() => _fixedExpenses.add(expense));
   }
@@ -664,26 +763,29 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
     setState(() => _fixedExpenses.removeWhere((item) => item.id == expense.id));
   }
 
+  void _applyWishItemToGoal(WishItem item) {
+    final isFirstGoal =
+        _selectedProfile.isFirstTime && !_firstTimeHasSelectedGoal;
+    _goal = _goal.copyWith(
+      name: item.name,
+      price: item.price,
+      imageUrl: item.imageUrl,
+      clearImage: true,
+      saved: isFirstGoal ? 0 : null,
+    );
+    if (_selectedProfile.isFirstTime) {
+      _firstTimeHasSelectedGoal = true;
+    }
+  }
+
   void _selectWishItem(WishItem item) {
-    setState(() {
-      _goal = _goal.copyWith(
-        name: item.name,
-        price: item.price,
-        imageUrl: item.imageUrl,
-        clearImage: true,
-      );
-    });
+    setState(() => _applyWishItemToGoal(item));
   }
 
   void _addWishItem(WishItem item) {
     setState(() {
       _wishItems.add(item);
-      _goal = _goal.copyWith(
-        name: item.name,
-        price: item.price,
-        imageUrl: item.imageUrl,
-        clearImage: true,
-      );
+      _applyWishItemToGoal(item);
     });
   }
 
@@ -741,7 +843,8 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
               return ShoppingScreen(
                 goal: _goal,
                 wishItems: _wishItems,
-                showEmptyState: _selectedProfile.isFirstTime,
+                showEmptyState:
+                    _selectedProfile.isFirstTime && !_firstTimeHasSelectedGoal,
                 productSearchGateway: _productSearchGateway,
                 onPeriodChanged: (period) {
                   _changePeriod(period);
@@ -764,6 +867,7 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
                   refreshSheet();
                 },
                 onSelectWishItem: _selectWishItem,
+                onSavePressed: () => _saveWithBank(context),
               );
             },
           ),
@@ -778,18 +882,19 @@ class _MoneyAppState extends State<MoneyApp> with WidgetsBindingObserver {
       AppTab.home || AppTab.shop => HomeScreen(
         key: ValueKey(_selectedProfile),
         selectedProfile: _selectedProfile,
+        signedInDisplayName: _homePersonalName,
         goal: _goal,
         unreadCount: _unreadCount,
-        accountBalance: activeAccountData.balance,
         transactions: activeAccountData.transactions,
-        isDemoData: activeAccountData.isDemo,
         onProfileChanged: _changeProfile,
         onOpenNotifications: _openNotifications,
         onPeriodChanged: _changePeriod,
         onAmountChanged: _changeSavingAmount,
+        onSavePressed: _saveWithBank,
         onOpenSpending: _openSpending,
         onOpenShop: (context) => _openWishlistSheet(context),
         onBuy: () => setState(() => _activeTab = AppTab.payment),
+        hasSelectedGoal: _firstTimeHasSelectedGoal,
       ),
       AppTab.settings => SettingsScreen(
         currentUser: _currentUser,

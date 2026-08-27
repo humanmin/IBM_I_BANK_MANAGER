@@ -19,6 +19,7 @@ class ShoppingScreen extends StatefulWidget {
     required this.onUpdateWishItem,
     required this.onDeleteWishItem,
     required this.onSelectWishItem,
+    required this.onSavePressed,
     this.showEmptyState = false,
     super.key,
   });
@@ -32,6 +33,7 @@ class ShoppingScreen extends StatefulWidget {
   final ValueChanged<WishItem> onUpdateWishItem;
   final ValueChanged<WishItem> onDeleteWishItem;
   final ValueChanged<WishItem> onSelectWishItem;
+  final VoidCallback onSavePressed;
   final bool showEmptyState;
 
   @override
@@ -399,6 +401,7 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
                   compact: true,
                   onPeriodChanged: widget.onPeriodChanged,
                   onAmountChanged: widget.onAmountChanged,
+                  onSavePressed: widget.onSavePressed,
                 ),
                 const SizedBox(height: 24),
                 Text(

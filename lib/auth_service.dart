@@ -21,6 +21,7 @@ abstract interface class AuthGateway {
   AppUser? get currentUser;
   Future<AppUser> signUpWithEmail(String email, String password);
   Future<AppUser> signInWithEmail(String email, String password);
+  Future<void> updateDisplayName(String name);
   Future<void> signOut();
 
   /// 서버 API 호출 시 Authorization 헤더에 넣을 ID Token.
@@ -107,6 +108,24 @@ class FirebaseAuthService implements AuthGateway {
       return _toAppUser(credential.user)!;
     } on fb.FirebaseAuthException catch (error) {
       throw AuthException(_messageFor(error));
+    } catch (_) {
+      _throwUnavailable();
+    }
+  }
+
+  @override
+  Future<void> updateDisplayName(String name) async {
+    try {
+      final user = _client.currentUser;
+      if (user == null) {
+        throw const AuthException('로그인이 필요해요.');
+      }
+      await user.updateDisplayName(name.trim());
+      await user.reload();
+    } on fb.FirebaseAuthException catch (error) {
+      throw AuthException(_messageFor(error));
+    } on AuthException {
+      rethrow;
     } catch (_) {
       _throwUnavailable();
     }

@@ -120,8 +120,14 @@ void main() {
     expect(find.text('김민진님, 반가워요!'), findsOneWidget);
     expect(find.byKey(const Key('first-goal-button')), findsOneWidget);
     expect(find.byKey(const Key('first-import-button')), findsOneWidget);
+    expect(find.byKey(const Key('first-time-saving-plan')), findsOneWidget);
+    expect(find.text('저축 계획'), findsOneWidget);
     expect(find.text('AirPods'), findsNothing);
     expect(find.text('257,230원'), findsNothing);
+    expect(
+      tester.getTopLeft(find.byKey(const Key('first-time-saving-plan'))).dy,
+      lessThan(tester.getTopLeft(find.text('처음 시작')).dy),
+    );
 
     await tester.tap(find.byKey(const Key('nav-spending')));
     await tester.pumpAndSettle();
@@ -149,6 +155,48 @@ void main() {
 
     expect(find.byKey(const Key('first-time-user-home')), findsNothing);
     expect(find.text('AirPods'), findsOneWidget);
+  });
+
+  testWidgets('first-time home shows the selected product as the goal card', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(402, 874));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MoneyApp(productSearchGateway: _FakeProductSearchGateway()),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('account-profile-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('김민진').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('first-goal-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('add-wish-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('product-search-field')),
+      '무선 키보드',
+    );
+    await tester.tap(find.byKey(const Key('product-search-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('product-result-keyboard-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('김민진님, 반가워요!'), findsNothing);
+    expect(find.byKey(const Key('first-goal-button')), findsNothing);
+    expect(find.text('무선 키보드 Pro'), findsOneWidget);
+    expect(find.text('갖고 싶은 것'), findsOneWidget);
+    expect(find.byKey(const Key('first-time-saving-plan')), findsOneWidget);
+    expect(find.text('저축 계획'), findsOneWidget);
+    expect(find.byKey(const Key('first-import-button')), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const Key('first-time-saving-plan'))).dy,
+      lessThan(tester.getTopLeft(find.text('갖고 싶은 것')).dy),
+    );
   });
 
   testWidgets('restores the selected user and imported statistics', (

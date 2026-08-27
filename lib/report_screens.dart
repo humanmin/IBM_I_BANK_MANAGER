@@ -701,23 +701,10 @@ class _SpendingBarCardState extends State<_SpendingBarCard> {
   _SpendingBarPeriod _period = _SpendingBarPeriod.daily;
 
   List<_ChartBar> get _dailyBars {
-    final today = DateTime(
-      widget.referenceDate.year,
-      widget.referenceDate.month,
-      widget.referenceDate.day,
-    );
-    return List.generate(7, (index) {
-      final date = today.subtract(Duration(days: 6 - index));
-      final amount = widget.transactions
-          .where(
-            (item) =>
-                item.date.year == date.year &&
-                item.date.month == date.month &&
-                item.date.day == date.day,
-          )
-          .fold<int>(0, (sum, item) => sum + item.amount);
-      return _ChartBar(label: '${date.day}일', amount: amount);
-    });
+    return [
+      for (final day in recentSpendingDays(widget.transactions))
+        _ChartBar(label: '${day.date.day}일', amount: day.amount),
+    ];
   }
 
   List<_ChartBar> get _weeklyBars {
@@ -794,7 +781,8 @@ class _SpendingBarCardState extends State<_SpendingBarCard> {
           height: 150,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
-            children: bars.map((bar) {
+            children: bars.asMap().entries.map((entry) {
+              final bar = entry.value;
               final ratio = maximum == 0 ? 0.0 : bar.amount / maximum;
               return Expanded(
                 child: Padding(
@@ -822,7 +810,7 @@ class _SpendingBarCardState extends State<_SpendingBarCard> {
                         child: Align(
                           alignment: Alignment.bottomCenter,
                           child: AnimatedContainer(
-                            key: Key('spending-bar-${bar.label}'),
+                            key: Key('spending-bar-${entry.key}-${bar.label}'),
                             duration: const Duration(milliseconds: 240),
                             curve: Curves.easeOutCubic,
                             width: _period == _SpendingBarPeriod.daily
@@ -917,9 +905,7 @@ class _RecentTransactionsScreenState extends State<RecentTransactionsScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedCategories = {
-      ?widget.initialCategory,
-    };
+    _selectedCategories = {?widget.initialCategory};
   }
 
   @override

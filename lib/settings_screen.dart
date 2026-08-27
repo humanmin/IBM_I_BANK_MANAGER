@@ -25,13 +25,11 @@ class SettingsScreen extends StatelessWidget {
   final VoidCallback onOpenAccount;
 
   static const _themeLabels = <ThemeChoice, String>{
-    ThemeChoice.yellow: '옐로',
     ThemeChoice.navy: '네이비',
     ThemeChoice.green: '그린',
   };
 
   static const _themeColors = <ThemeChoice, Color>{
-    ThemeChoice.yellow: Color(0xFFFDE932),
     ThemeChoice.navy: Color(0xFF7D8FAD),
     ThemeChoice.green: Color(0xFF9FC4A6),
   };
